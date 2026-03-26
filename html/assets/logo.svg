@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="280px" height="280px" viewBox="0 0 280 280" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <g id="nictool" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="Group-4">
+            <rect id="Rectangle" stroke="#979797" fill="#39719D" x="0.5" y="0.5" width="279" height="279"></rect>
+            <g id="Group-3" transform="translate(140.500000, 131.750000) rotate(-90.000000) translate(-140.500000, -131.750000) translate(27.250000, 97.750000)">
+                <line x1="0.468253968" y1="12" x2="176.531746" y2="12" id="Line" stroke="#E8E2E2" stroke-width="5" fill="#FFFFFF" stroke-linecap="square"></line>
+                <g id="Group-2" transform="translate(178.500000, 0.000000)" fill="#FFFFFF" stroke="#E8E2E2" stroke-linecap="square" stroke-width="5">
+                    <line x1="28.7058824" y1="20.5961538" x2="47.5294118" y2="20.5961538" id="Line"></line>
+                    <line x1="47.5294118" y1="5.25" x2="45.6470588" y2="19.7884615" id="Line" transform="translate(46.588235, 12.519231) scale(1, -1) translate(-46.588235, -12.519231) "></line>
+                    <line x1="30.5882353" y1="4.44230769" x2="44.7058824" y2="0.403846154" id="Line" transform="translate(37.647059, 2.423077) scale(1, -1) translate(-37.647059, -2.423077) "></line>
+                    <line x1="12.7058824" y1="0.403846154" x2="27.7647059" y2="3.63461538" id="Line" transform="translate(20.235294, 2.019231) scale(1, -1) translate(-20.235294, -2.019231) "></line>
+                    <line x1="0.470588235" y1="5.25" x2="9.88235294" y2="11.7115385" id="Line" transform="translate(5.176471, 8.480769) scale(1, -1) translate(-5.176471, -8.480769) "></line>
+                </g>
+                <g id="Group" transform="translate(178.500000, 47.000000)" fill="#FFFFFF" stroke="#E8E2E2" stroke-linecap="square" stroke-width="5">
+                    <line x1="28.7058824" y1="0.403846154" x2="47.5294118" y2="0.403846154" id="Line"></line>
+                    <line x1="47.5294118" y1="1.21153846" x2="44.7058824" y2="16.5576923" id="Line"></line>
+                    <line x1="32.4705882" y1="20.5961538" x2="43.7647059" y2="17.3653846" id="Line"></line>
+                    <line x1="13.6470588" y1="18.1730769" x2="29.6470588" y2="20.5961538" id="Line"></line>
+                    <line x1="0.470588235" y1="9.28846154" x2="10.8235294" y2="16.5576923" id="Line"></line>
+                </g>
+                <line x1="206" y1="20.4117647" x2="206" y2="47.5882353" id="Line" stroke="#E8E2E2" stroke-width="5" fill="#FFFFFF" stroke-linecap="square"></line>
+                <line x1="0.468253968" y1="55" x2="176.531746" y2="55" id="Line" stroke="#E8E2E2" stroke-width="5" fill="#FFFFFF" stroke-linecap="square"></line>
+                <line x1="0.5" y1="54.0943396" x2="0.5" y2="11.9056604" id="Line" stroke="#E8E2E2" stroke-width="5" fill="#FFFFFF" stroke-linecap="square"></line>
+                <text id="t-o-o-l" transform="translate(103.000000, 33.500000) rotate(90.000000) translate(-103.000000, -33.500000) " font-family="HelveticaNeue-Medium, Helvetica Neue" font-size="36" font-weight="400" fill="#FFFDFD">
+                    <tspan x="97.006" y="-24.5">t</tspan>
+                    <tspan x="92.326" y="18.5">o</tspan>
+                    <tspan x="92.326" y="61.5">o</tspan>
+                    <tspan x="98.662" y="104.5">l</tspan>
+                </text>
+            </g>
+            <text id="n" font-family="HelveticaNeue, Helvetica Neue" font-size="210" font-weight="normal" fill="#FFFDFD">
+                <tspan x="0" y="203">n</tspan>
+            </text>
+            <text id="c" font-family="HelveticaNeue, Helvetica Neue" font-size="210" font-weight="normal" fill="#FFFDFD">
+                <tspan x="166" y="203">c</tspan>
+            </text>
+        </g>
+    </g>
+</svg>

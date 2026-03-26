@@ -1,0 +1,49 @@
+{
+  "name": "nictool",
+  "version": "0.0.1",
+  "description": "NicTool, the DNS manager",
+  "main": "index.js",
+  "type": "module",
+  "bin": {
+    "nictool-server": "bin/start.js"
+  },
+  "scripts": {
+    "build": "",
+    "clean": "rm -rf node_modules package-lock.json",
+    "format:check": "npm run prettier; npm run lint",
+    "format": "npm run prettier -- --write && npm run lint:fix",
+    "lint": "npx eslint **/*.js",
+    "lint:fix": "npm run lint -- --fix",
+    "prettier": "npx prettier --ignore-path .gitignore --check .",
+    "prettier:fix": "npx prettier --ignore-path .gitignore --write .",
+    "test": "node --test test/*.js",
+    "test:coverage": "npx c8 --reporter=text --reporter=text-summary npm test",
+    "versions": "npx npm-dep-mgr check",
+    "versions:fix": "npx npm-dep-mgr update",
+    "watch": "node --test --watch test/*.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NicTool/server.git"
+  },
+  "keywords": [
+    "nictool",
+    "config",
+    "server",
+    "dns",
+    "manager"
+  ],
+  "author": "Matt Simerson <matt@tnpi.net>",
+  "license": "BSD-3-Clause",
+  "bugs": {
+    "url": "https://github.com/NicTool/server/issues"
+  },
+  "homepage": "https://github.com/NicTool/server#readme",
+  "dependencies": {
+    "@nictool/api": "^3.0.0-alpha.10",
+    "@nictool/dns-nameserver": "^0.7.3",
+    "@nictool/dns-resource-record": "^1.5.0",
+    "@nictool/dns-zone": "^1.1.7",
+    "smol-toml": "^1.6.1"
+  }
+}

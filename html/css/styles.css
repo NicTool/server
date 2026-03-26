@@ -1,0 +1,97 @@
+#zone_table td.zone-disclosure,
+#zone_table td.zone-name-toggle {
+  cursor: pointer;
+}
+
+#zone_table .zone-toggle-icon {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--bs-secondary-color);
+}
+
+#zone_table tbody tr.zone-row-open > td {
+  background-color: rgba(51, 102, 102, 0.12) !important;
+}
+
+#zone_table tbody tr.zone-row-open > td.zone-name-toggle {
+  font-weight: 600;
+}
+
+#zone_table .zone-records-panel .dataTables_length,
+#zone_table .zone-records-panel .dataTables_info,
+#zone_table .zone-records-panel .dataTables_paginate,
+#zone_table .zone-records-panel .dt-length,
+#zone_table .zone-records-panel .dt-info,
+#zone_table .zone-records-panel .dt-paging {
+  font-size: 0.8rem;
+  color: var(--bs-secondary-color);
+  opacity: 0.5;
+}
+
+#zone_table .zone-records-panel .dataTables_length select,
+#zone_table .zone-records-panel .dt-length select {
+  min-width: 4.25rem;
+  font-size: 0.8rem;
+  padding-top: 0.15rem;
+  padding-bottom: 0.15rem;
+  color: var(--bs-secondary-color);
+  border-color: var(--bs-border-color-translucent);
+  background-color: transparent;
+}
+
+#zone_table .zone-records-panel .paginate_button,
+#zone_table .zone-records-panel .dt-paging-button {
+  font-size: 0.8rem;
+  padding: 0.1rem 0.35rem !important;
+}
+
+#zone_table .zone-records-table td.small {
+  font-size: 0.9rem;
+}
+
+#zone_table .zone-records-table > thead > tr > th {
+  background-color: transparent !important;
+  color: var(--bs-secondary-color);
+}
+
+#zone_table .zone-records-table > tbody > tr:nth-of-type(odd) > * {
+  background-color: transparent !important;
+}
+
+#zone_table .zone-records-table > tbody > tr:nth-of-type(even) > * {
+  background-color: rgba(108, 117, 125, 0.12) !important;
+}
+
+#zone_table_wrapper .dataTables_length,
+#zone_table_wrapper .dataTables_info,
+#zone_table_wrapper .dataTables_paginate,
+#zone_table_wrapper .dataTables_filter,
+#zone_table_wrapper .dt-length,
+#zone_table_wrapper .dt-info,
+#zone_table_wrapper .dt-paging,
+#zone_table_wrapper .dt-search {
+  font-size: 0.8rem;
+  color: var(--bs-secondary-color);
+  opacity: 0.5;
+}
+
+#zone_table_wrapper .dataTables_length select,
+#zone_table_wrapper .dt-length select,
+#zone_table_wrapper .dataTables_filter input,
+#zone_table_wrapper .dt-search input {
+  font-size: 0.8rem;
+  padding-top: 0.15rem;
+  padding-bottom: 0.15rem;
+  color: var(--bs-secondary-color);
+  border-color: var(--bs-border-color-translucent);
+  background-color: transparent;
+}
+
+#zone_table_wrapper .paginate_button,
+#zone_table_wrapper .dt-paging-button {
+  font-size: 0.8rem;
+  padding: 0.1rem 0.35rem !important;
+}
+
+/*# sourceMappingURL=styles.css.map */
