@@ -1,16 +1,9 @@
-// Import our custom CSS
-
-// import "datatables.net-bs5/css/dataTables.bootstrap5.css";
-
-// Import all of Bootstrap's JS
-// import * as bootstrap from "bootstrap";
-// import DataTable from "datatables.net-bs5";
-
 import * as RR from "/nictool/dns-resource-record/index.js";
 
-const API_URI = "https://mattbook-m3.home.simerson.net:55685";
+const API_URI = "https://mattbook-m3.home.simerson.net:3000";
 let nsDataTable;
 let zoneDataTable;
+let userDataTable;
 const zoneRecordDataTables = new Map();
 const zoneColumnSearchTimers = new Map();
 const RR_DATA_PREVIEW_CHARS = 72;
@@ -61,6 +54,45 @@ function formatZoneRecordTtl(ttl) {
   return ttl === 0 || ttl === undefined || ttl === null ? "" : `${ttl}`;
 }
 
+const RR_PLACEHOLDERS = {
+  A:          { owner: 'host',        address: '192.0.99.5' },
+  AAAA:       { owner: 'host',        address: '2001:db8:f00d::2' },
+  CAA:        { owner: '',            address: '' },
+  CNAME:      { owner: 'host',        address: 'fqdn.example.com.' },
+  DNAME:      { owner: 'subdomain',   address: 'fqdn.example.com.' },
+  HINFO:      { owner: 'host',        address: 'CPU OS' },
+  LOC:        { owner: 'host',        address: '47 43 47.000 N 122 21 35.000 W 132.00m 100m 100m 2m' },
+  MX:         { owner: '@',           address: 'mail.example.com.' },
+  NAPTR:      { owner: '',            address: '"" "" "/urn:cid:.+@([^\\.]+\\.)(.*)$/\\2/i"' },
+  NS:         { owner: 'subdomain',   address: 'ns1.example.com.' },
+  NSEC:       { owner: '',            address: 'host.example.com.' },
+  NSEC3:      { owner: '',            address: '1 1 12 aabbccdd ( 2t7b4g4vsa5smi47k61mv5bv1a22bojr MX DNSKEY NS SOA NSEC3PARAM RRSIG )' },
+  NSEC3PARAM: { owner: '',            address: '1 1 12 aa99ffdd' },
+  PTR:        { owner: '',            address: 'host.example.com.' },
+  RRSIG:      { owner: '',            address: 'A 5 3 86400 20030322173103 ( 20030220173103 2642 example.com. oJB1W6...)' },
+  SPF:        { owner: '@',           address: 'v=spf1 mx a -all' },
+  SRV:        { owner: '_dns._udp',   address: 'ns1.example.com.' },
+  SSHFP:      { owner: 'host',        address: '' },
+  TXT:        { owner: '',            address: '' },
+  URI:        { owner: '_ftp._tcp',   address: 'ftp://ftp1.example.com/public' },
+}
+
+function setRRTypePlaceholders(type) {
+  const p = RR_PLACEHOLDERS[type] ?? {}
+
+  const ownerEl = document.getElementById("zrEditOwner")
+  if (ownerEl && p.owner !== undefined) ownerEl.placeholder = p.owner
+
+  if (p.address !== undefined) {
+    // rdata fields are generated as zrEdit${fieldName}; try 'address' first,
+    // then fall back to the first text input in the rdata container
+    const addrEl =
+      document.getElementById("zrEditaddress") ??
+      document.querySelector("#zrEditRdata input[type='text'], #zrEditRdata textarea")
+    if (addrEl) addrEl.placeholder = p.address
+  }
+}
+
 function setZoneRecordModalMode(mode) {
   const title = document.getElementById("zrEditModalLabel");
   const deleteButton = document.getElementById("zrDeleteButton");
@@ -72,19 +104,16 @@ function setZoneRecordModalMode(mode) {
 }
 
 function openCreateZoneRecordModal(zone) {
-  const defaultType = "A";
+  const zoneFqdn = `${zone.zone}`.endsWith(".") ? zone.zone : `${zone.zone}.`;
+  const defaultType = zoneFqdn.endsWith(".arpa.") ? "PTR" : "A";
   const rrCtor = RR[defaultType];
   const rr = new rrCtor(null);
-  const zr = {
-    zid: zone.id,
-    owner: "www",
-    type: defaultType,
-    address: "127.0.0.1",
-  };
+  const zr = { zid: zone.id, owner: "", type: defaultType, address: "" };
 
   activeZoneRecordContext = { zone, mode: "create", rr };
   setZoneRecordModalMode("create");
   editZoneRecord(zone, zr, rr);
+  setRRTypePlaceholders(defaultType);
 
   const modalEl = document.getElementById("zrEditModal");
   const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
@@ -251,6 +280,7 @@ function onLoggedIn(response) {
 
   showNameservers();
   showZones();
+  showUsers();
 }
 
 function onLoggedOut() {
@@ -400,6 +430,74 @@ function showNameservers() {
   });
 }
 
+function showUsers() {
+  ajax({
+    method: "GET",
+    url: `${API_URI}/user`,
+  }).then((response) => {
+    const table = document.getElementById("user_table");
+    const tableHead = table.querySelector("thead");
+
+    while (tableHead.rows.length > 1) {
+      tableHead.deleteRow(1);
+    }
+
+    if (userDataTable) {
+      userDataTable.destroy();
+      userDataTable = undefined;
+    }
+
+    const body = table.querySelector("tbody");
+    body.innerHTML = "";
+
+    const sorted = (response.user ?? [])
+      .slice()
+      .sort((a, b) => Number(a.id) - Number(b.id));
+
+    for (const u of sorted) {
+      const row = document.createElement("tr");
+      row.id = `user_${u.id}_tr`;
+      row.innerHTML = `
+        <td>${u.username ?? ""}</td>
+        <td>${u.first_name ?? ""} ${u.last_name ?? ""}</td>
+        <td>${u.email ?? ""}</td>
+        <td style="text-align: center">${u.is_admin ? "✓" : ""}</td>
+        <td style="text-align: center"><button type="button" class="btn btn-sm btn-outline-secondary">⛭</button></td>
+      `;
+      body.appendChild(row);
+    }
+
+    const filterRow = tableHead.rows[0].cloneNode(true);
+    filterRow.classList.add("user-filter-row");
+    for (let i = 0; i < filterRow.cells.length; i++) {
+      const cell = filterRow.cells[i];
+      if (i === filterRow.cells.length - 1) { cell.innerHTML = ""; continue; }
+      const title = tableHead.rows[0].cells[i].textContent.trim();
+      cell.innerHTML = `<input type="search" class="form-control form-control-sm" placeholder="Search ${title}" aria-label="Search ${title}">`;
+    }
+    tableHead.appendChild(filterRow);
+
+    userDataTable = new DataTable(table, {
+      orderCellsTop: true,
+      pageLength: 25,
+      lengthMenu: [10, 25, 50, 100],
+      columnDefs: [
+        { orderable: false, searchable: false, targets: [4] },
+      ],
+      initComplete() {
+        const api = this.api();
+        api.columns().every(function (index) {
+          const input = filterRow.cells[index].querySelector("input");
+          if (!input) return;
+          input.addEventListener("input", () => {
+            if (this.search() !== input.value) this.search(input.value).draw();
+          });
+        });
+      },
+    });
+  });
+}
+
 function showZones() {
   const ztbody = document.getElementById("zone_tbody");
   if (!ztbody) return;
@@ -449,7 +547,7 @@ function showZones() {
         data: null,
         className: "text-center",
         defaultContent:
-          '<div class="d-inline-flex align-items-center gap-2"><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 zone-add-zr-btn" aria-label="Add resource record" title="Add resource record" style="text-decoration: none; font-size: 1rem; line-height: 1;">+</button><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 zone-delete-btn" aria-label="Delete zone" title="Delete zone" style="text-decoration: none; font-size: 0.9rem; line-height: 1;">🗑</button></div>',
+          '<div class="d-inline-flex align-items-center gap-2"><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 zone-add-zr-btn" aria-label="Add resource record" title="Add resource record" style="text-decoration: none; font-size: 1rem; line-height: 1;">+</button><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 zone-edit-btn" aria-label="Edit zone" title="Edit zone" style="text-decoration: none; font-size: 0.9rem; line-height: 1;">✎</button><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 zone-delete-btn" aria-label="Delete zone" title="Delete zone" style="text-decoration: none; font-size: 0.9rem; line-height: 1;">🗑</button></div>',
       },
     ],
     async ajax(data, callback) {
@@ -538,6 +636,19 @@ function showZones() {
       return;
     }
 
+    const zoneEditButton = event.target.closest("button.zone-edit-btn");
+    if (zoneEditButton) {
+      const tr = zoneEditButton.closest("tr");
+      if (!tr) return;
+
+      const row = zoneDataTable.row(tr);
+      const zone = row.data();
+      if (!zone) return;
+
+      openEditZoneModal(zone);
+      return;
+    }
+
     const deleteButton = event.target.closest("button.zone-delete-btn");
     if (deleteButton) {
       const tr = deleteButton.closest("tr");
@@ -619,6 +730,35 @@ function showZones() {
   };
 }
 
+function buildSyntheticSoaRow(zone) {
+  const zoneFqdn = `${zone.zone}`.endsWith(".") ? zone.zone : `${zone.zone}.`;
+  const mname = Array.isArray(zone.nameservers) && zone.nameservers.length
+    ? (zone.nameservers[0].endsWith(".") ? zone.nameservers[0] : `${zone.nameservers[0]}.`)
+    : `ns1.${zoneFqdn}`;
+  const rname = zone.mailaddr
+    ? (zone.mailaddr.endsWith(".") ? zone.mailaddr : `${zone.mailaddr}.`)
+    : `hostmaster.${zoneFqdn}`;
+  const serial  = zone.serial  ?? 0;
+  const refresh = zone.refresh ?? 86400;
+  const retry   = zone.retry   ?? 7200;
+  const expire  = zone.expire  ?? 1209600;
+  const minimum = zone.minimum ?? 3600;
+  const rdata = `${mname} ${rname} ${serial} ${refresh} ${retry} ${expire} ${minimum}`;
+
+  const row = document.createElement("tr");
+  row.classList.add("zone-record-soa");
+  row.innerHTML = `
+    <td class="small text-muted">${escapeHtml(zoneFqdn)}</td>
+    <td class="small text-muted">SOA</td>
+    <td class="small text-muted">${escapeHtml(formatZoneRecordTtl(zone.ttl))}</td>
+    <td class="small text-muted" style="width: 50%;">
+      <span class="text-truncate" style="display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(rdata)}">${escapeHtml(rdata)}</span>
+    </td>
+    <td class="small text-center"></td>
+  `;
+  return row;
+}
+
 function showZoneRecords(zone) {
   const zrTable = zoneRecordDataTables.get(zone.id);
   if (zrTable) {
@@ -632,6 +772,8 @@ function showZoneRecords(zone) {
   const tbody = document.getElementById(`zone_${zone.id}_tbody`);
   if (!tbody) return;
   tbody.innerHTML = "";
+
+  tbody.appendChild(buildSyntheticSoaRow(zone));
 
   ajax({
     method: "GET",
@@ -787,6 +929,77 @@ function showZoneRecords(zone) {
   });
 }
 
+let activeZoneContext = null;
+
+function openEditZoneModal(zone) {
+  activeZoneContext = zone;
+
+  document.getElementById("zoneEditName").value        = zone.zone ?? "";
+  document.getElementById("zoneEditDescription").value = zone.description ?? "";
+  document.getElementById("zoneEditMailaddr").value    = zone.mailaddr ?? "";
+  document.getElementById("zoneEditTtl").value         = zone.ttl ?? "";
+  document.getElementById("zoneEditMinimum").value     = zone.minimum ?? "";
+  document.getElementById("zoneEditRefresh").value     = zone.refresh ?? "";
+  document.getElementById("zoneEditRetry").value       = zone.retry ?? "";
+  document.getElementById("zoneEditExpire").value      = zone.expire ?? "";
+
+  initZoneModalActions();
+
+  const modalEl = document.getElementById("zoneEditModal");
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
+function initZoneModalActions() {
+  const saveButton = document.getElementById("zoneEditSaveButton");
+  if (!saveButton || saveButton.dataset.initialized === "true") return;
+  saveButton.dataset.initialized = "true";
+
+  saveButton.addEventListener("click", async () => {
+    const zone = activeZoneContext;
+    if (!zone?.id) return;
+
+    const payload = {};
+    const description = document.getElementById("zoneEditDescription").value;
+    const mailaddr    = document.getElementById("zoneEditMailaddr").value;
+    const ttl         = document.getElementById("zoneEditTtl").value;
+    const minimum     = document.getElementById("zoneEditMinimum").value;
+    const refresh     = document.getElementById("zoneEditRefresh").value;
+    const retry       = document.getElementById("zoneEditRetry").value;
+    const expire      = document.getElementById("zoneEditExpire").value;
+
+    payload.description = description;
+    payload.mailaddr    = mailaddr;
+    if (ttl     !== "") payload.ttl     = Number(ttl);
+    if (minimum !== "") payload.minimum = Number(minimum);
+    if (refresh !== "") payload.refresh = Number(refresh);
+    if (retry   !== "") payload.retry   = Number(retry);
+    if (expire  !== "") payload.expire  = Number(expire);
+
+    saveButton.disabled = true;
+    try {
+      const response = await ajax({
+        method: "PUT",
+        url: `${API_URI}/zone/${zone.id}`,
+        payload,
+      });
+
+      if (!response || response?.error) {
+        console.error("Update zone failed:", response);
+        alert(response?.message ?? "Update failed. See console for details.");
+        return;
+      }
+
+      bootstrap.Modal.getOrCreateInstance(document.getElementById("zoneEditModal")).hide();
+      zoneDataTable.ajax.reload(null, false);
+    } catch (error) {
+      console.error("Update zone request failed:", error);
+      alert("Update failed due to a network or server error.");
+    } finally {
+      saveButton.disabled = false;
+    }
+  });
+}
+
 function initZoneRecordModalActions() {
   const deleteButton = document.getElementById("zrDeleteButton");
   const saveButton = document.getElementById("zrSaveButton");
@@ -885,16 +1098,35 @@ function initZoneRecordModalActions() {
 
 function populateZrEditType() {
   const sel = document.getElementById("zrEditType");
-  // console.log(RR)
+
+  const groups = {
+    "LESS COMMON": document.createElement("optgroup"),
+    "SECURITY":    document.createElement("optgroup"),
+    "DNSSEC":      document.createElement("optgroup"),
+    "DEPRECATED":  document.createElement("optgroup"),
+    "OBSOLETE":    document.createElement("optgroup"),
+  };
+  for (const [label, el] of Object.entries(groups)) el.label = label;
+
+  const tagToGroup = { security: "SECURITY", dnssec: "DNSSEC", deprecated: "DEPRECATED", obsolete: "OBSOLETE" };
 
   for (const rr in RR) {
     if (["default", "typeMap"].includes(rr)) continue;
+    const instance = new RR[rr](null);
     const option = document.createElement("option");
     option.value = rr;
-    option.asRR = new RR[rr](null);
-    option.innerHTML = `${rr}  -  ${option.asRR.getDescription()}`;
-    sel.appendChild(option);
+    option.innerHTML = `${rr}  -  ${instance.getDescription()}`;
+
+    const tags = instance.getTags();
+    if (tags.includes("common")) {
+      sel.appendChild(option);
+    } else {
+      const groupName = tags.map((t) => tagToGroup[t]).find(Boolean) ?? "LESS COMMON";
+      groups[groupName].appendChild(option);
+    }
   }
+
+  for (const el of Object.values(groups)) sel.appendChild(el);
 }
 
 function getRdataInput(field, value = "", rr) {
@@ -1055,6 +1287,7 @@ function editZoneRecord(zone, zr, rr) {
     console.log("selected", selected);
     const newRR = new RR[selected.value](null);
     populateZrEditRdata(newRR, zr);
+    setRRTypePlaceholders(selected.value);
     typeRFCs.innerHTML = `RFCs: ${newRR
       .getRFCs()
       .map(

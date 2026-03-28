@@ -7,13 +7,13 @@
     <meta name="description" content="NicTool Client UI" />
     <title>NicTool v3</title>
     <script src="https://code.jquery.com/jquery-4.0.0.min.js"></script>
-    <script src="https://cdn.datatables.net/2.3.7/js/dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/v/bs5/jq-3.7.0/dt-2.3.7/datatables.min.js" integrity="sha384-vt7Se62YlbFnFq+6GomzrzmNsmoyYSLuZlXUULIBkHoL6at7yZfsATRmsQ3MtuJP" crossorigin="anonymous"></script>    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
     <script type="module" src="/nictool/dns-resource-record/index.js"></script>
     <script type="module" src="/js/main.js"></script>
-    <link rel="stylesheet" href="/css/styles.css" />
-    <link rel="stylesheet" href="https://cdn.datatables.net/2.3.7/css/dataTables.dataTables.min.css" />
+    <link rel="stylesheet" href="https://cdn.datatables.net/v/bs5/jq-3.7.0/dt-2.3.7/datatables.min.css" integrity="sha384-TaPZIHS40hwajVHHLxaVNexgxbNrJTIRl7BUl34LA1SFjtWIrsAJkw5e73Pb2wQ+" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <link rel="stylesheet" href="/css/styles.css" />
   </head>
 
   <body class="bg-dark-subtle" style="">
@@ -47,6 +47,45 @@
         </button>
       </div>
       <div class="collapse navbar-collapse" id="navbarSupportedContent">
+        <ul class="navbar-nav" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link active"
+              id="tab-zones"
+              data-bs-toggle="tab"
+              data-bs-target="#zones_div"
+              type="button"
+              role="tab"
+              aria-controls="zones_div"
+              aria-selected="true"
+            >Zones</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link"
+              id="tab-nameservers"
+              data-bs-toggle="tab"
+              data-bs-target="#nameservers_div"
+              type="button"
+              role="tab"
+              aria-controls="nameservers_div"
+              aria-selected="false"
+            >Nameservers</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link"
+              id="tab-users"
+              data-bs-toggle="tab"
+              data-bs-target="#users_div"
+              type="button"
+              role="tab"
+              aria-controls="users_div"
+              aria-selected="false"
+            >Users</button>
+          </li>
+        </ul>
+
         <ul class="navbar-nav">
           <li class="navbar-item dropdown">
             <a
@@ -154,32 +193,41 @@
         </form>
       </div>
 
-      <div
-        id="loggedInMain"
-        class="accordion accordion-flush"
-        style="display: none"
-      >
-        <div id="nameservers" class="accordion-item">
-          <h4 class="accordion-header">
-            <button
-              class="accordion-button"
-              type="button"
-              data-bs-toggle="collapse"
-              data-bs-target="#nameservers_div"
-              aria-expanded="false"
-              aria-controls="nameservers_div"
+      <div id="loggedInMain" style="display: none">
+        <div class="tab-content p-2">
+          <div id="zones_div" class="tab-pane fade show active" role="tabpanel" aria-labelledby="tab-zones">
+            <table
+              id="zone_table"
+              class="col-12 table-striped table-hover table-bordered"
             >
-              Nameservers
-            </button>
-          </h4>
-          <div
-            id="nameservers_div"
-            class="accordion-collapse collapse"
-            data-bs-parent="#loggedInMain"
-          >
+              <thead>
+                <tr id="zone_th">
+                  <th style="text-align: center; width: 2rem"></th>
+                  <th style="text-align: left">Zone</th>
+                  <th style="text-align: left">Description</th>
+                  <th style="text-align: center; width: 4rem">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="zone_tbody"></tbody>
+            </table>
+
+            <div class="form-check form-switch mt-3 text-body-secondary small">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                role="switch"
+                id="zoneSearchDeleted"
+              />
+              <label class="form-check-label" for="zoneSearchDeleted"
+                >Search deleted zones</label
+              >
+            </div>
+          </div>
+
+          <div id="nameservers_div" class="tab-pane fade" role="tabpanel" aria-labelledby="tab-nameservers">
             <table
               id="ns_table"
-              class="accordion-body col-11 table table-striped table-hover table-bordered"
+              class="col-11 table table-striped table-hover table-bordered"
             >
               <thead>
                 <tr>
@@ -194,66 +242,94 @@
               <tbody></tbody>
             </table>
           </div>
-        </div>
 
-        <div id="zones" class="accordian-item">
-          <h4 class="accordion-header">
-            <button
-              class="accordion-button"
-              type="button"
-              data-bs-toggle="collapse"
-              data-bs-target="#zones_div"
-              aria-expanded="false"
-              aria-controls="zones_div"
+          <div id="users_div" class="tab-pane fade" role="tabpanel" aria-labelledby="tab-users">
+            <table
+              id="user_table"
+              class="col-11 table table-striped table-hover table-bordered"
             >
-              Zones
-            </button>
-          </h4>
-
-          <div
-            id="zones_div"
-            class="accordion-collapse collapse show"
-            data-bs-parent="#loggedInMain"
-          >
-            <div class="accordion-body">
-              <!-- <div class="col" id="zones_search">
-                                <form class="d-flex" role="search">
-                                    <input class="form-control me-2" type="search" placeholder="Search Zones" aria-label="Search" style="min-width: 10em;">
-                                    <button class="btn btn-outline-success" type="submit">Search</button>
-                                </form>    
-                            </div> -->
-
-              <table
-                id="zone_table"
-                class="col-12 table-striped table-hover table-bordered"
-              >
-                <thead>
-                  <tr id="zone_th">
-                    <th style="text-align: center; width: 2rem"></th>
-                    <th style="text-align: left">Zone</th>
-                    <th style="text-align: left">Description</th>
-                    <th style="text-align: center; width: 4rem">Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="zone_tbody"></tbody>
-              </table>
-
-              <div class="form-check form-switch mt-3 text-body-secondary small">
-                <input
-                  class="form-check-input"
-                  type="checkbox"
-                  role="switch"
-                  id="zoneSearchDeleted"
-                />
-                <label class="form-check-label" for="zoneSearchDeleted"
-                  >Search deleted zones</label
-                >
-              </div>
-            </div>
+              <thead>
+                <tr>
+                  <th style="text-align: left">Username</th>
+                  <th style="text-align: left">Name</th>
+                  <th style="text-align: left">Email</th>
+                  <th style="text-align: center">Admin</th>
+                  <th style="text-align: center">Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
           </div>
         </div>
       </div>
     </main>
+
+    <div
+      class="modal fade"
+      id="zoneEditModal"
+      tabindex="-1"
+      aria-labelledby="zoneEditModalLabel"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h1 class="modal-title fs-5" id="zoneEditModalLabel">Edit Zone</h1>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="container-fluid">
+              <div class="mb-3 row">
+                <div class="form-floating col-md-12">
+                  <input type="text" class="form-control form-control-sm" id="zoneEditName" readonly />
+                  <label for="zoneEditName" class="form-label ms-2">Zone</label>
+                </div>
+              </div>
+              <div class="mb-3 row">
+                <div class="form-floating col-md-12">
+                  <input type="text" class="form-control form-control-sm" id="zoneEditDescription" placeholder="Description" />
+                  <label for="zoneEditDescription" class="form-label ms-2">Description</label>
+                </div>
+              </div>
+              <div class="mb-3 row">
+                <div class="form-floating col-md-12">
+                  <input type="text" class="form-control form-control-sm" id="zoneEditMailaddr" placeholder="hostmaster" />
+                  <label for="zoneEditMailaddr" class="form-label ms-2">Hostmaster (mailaddr)</label>
+                </div>
+              </div>
+              <div class="mb-3 row">
+                <div class="form-floating col-md-6">
+                  <input type="number" min="0" max="2147483647" step="3600" class="form-control form-control-sm" id="zoneEditTtl" placeholder="3600" />
+                  <label for="zoneEditTtl" class="form-label ms-2">Default TTL</label>
+                </div>
+                <div class="form-floating col-md-6">
+                  <input type="number" min="0" max="2147483647" step="3600" class="form-control form-control-sm" id="zoneEditMinimum" placeholder="3600" />
+                  <label for="zoneEditMinimum" class="form-label ms-2">Minimum (negative TTL)</label>
+                </div>
+              </div>
+              <div class="mb-3 row">
+                <div class="form-floating col-md-4">
+                  <input type="number" min="0" max="2147483647" step="3600" class="form-control form-control-sm" id="zoneEditRefresh" placeholder="86400" />
+                  <label for="zoneEditRefresh" class="form-label ms-2">Refresh</label>
+                </div>
+                <div class="form-floating col-md-4">
+                  <input type="number" min="0" max="2147483647" step="3600" class="form-control form-control-sm" id="zoneEditRetry" placeholder="7200" />
+                  <label for="zoneEditRetry" class="form-label ms-2">Retry</label>
+                </div>
+                <div class="form-floating col-md-4">
+                  <input type="number" min="0" max="2147483647" step="86400" class="form-control form-control-sm" id="zoneEditExpire" placeholder="1209600" />
+                  <label for="zoneEditExpire" class="form-label ms-2">Expire</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button id="zoneEditSaveButton" type="button" class="btn btn-primary">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div
       class="modal fade"

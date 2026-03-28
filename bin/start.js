@@ -244,8 +244,14 @@ function isLocalHost(host) {
  * If nictool.toml specifies a local api.host, update the API package's
  * http.toml with the configured port and spawn it as a supervised child process.
  */
+function storeTypeToEnv(type) {
+  if (type === 'directory') return 'toml'
+  return type ?? 'mysql'
+}
+
 async function maybeStartAPI(config) {
   if (!config || !config.api || !isLocalHost(config.api.host)) return null
+  if (config.api?.start === false) return null
 
   const apiPkgDir = new URL('../node_modules/@nictool/api', import.meta.url).pathname
   const serverJs = path.join(apiPkgDir, 'server.js')
@@ -272,8 +278,8 @@ async function maybeStartAPI(config) {
     return null
   }
 
-  // Patch the API's mysql.toml when nictool.toml uses a database store
-  if (config.store?.type === 'database') {
+  // Patch the API's mysql.toml when nictool.toml uses a mysql store
+  if (config.store?.type === 'mysql') {
     const mysqlTomlPath = path.join(apiPkgDir, 'conf.d', 'mysql.toml')
     try {
       const content = await fs.readFile(mysqlTomlPath, 'utf8')
@@ -290,10 +296,20 @@ async function maybeStartAPI(config) {
     }
   }
 
+  const storeEnv = {
+    NICTOOL_DATA_STORE: storeTypeToEnv(config.store?.type),
+  }
+  if (config.store?.path) storeEnv.NICTOOL_DATA_STORE_PATH = config.store.path
+  if (config.store?.dsn)  storeEnv.NICTOOL_DATA_STORE_DSN  = config.store.dsn
+
   const child = spawn(process.execPath, [serverJs], {
     cwd: apiPkgDir,
     stdio: 'inherit',
-    env: { ...process.env, NODE_ENV: process.env.NODE_ENV || 'production' },
+    env: {
+      ...process.env,
+      NODE_ENV: process.env.NODE_ENV || 'production',
+      ...storeEnv,
+    },
   })
 
   child.on('error', (err) => console.error(`API process error: ${err.message}`))

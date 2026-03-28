@@ -166,6 +166,17 @@ async function toggleService(req, res, ctx) {
     console.log('API stopped')
   }
 
+  // Persist the start preference to nictool.toml
+  if (ctx.nicConfig) {
+    if (!ctx.nicConfig.api) ctx.nicConfig.api = {}
+    ctx.nicConfig.api.start = want
+    try {
+      await fs.writeFile(ctx.tomlPath, stringify(ctx.nicConfig))
+    } catch (err) {
+      console.warn(`Could not persist start state: ${err.message}`)
+    }
+  }
+
   serveService(res, ctx)
 }
 
@@ -179,7 +190,7 @@ async function checkPath(req, res, { configDir }) {
   try {
     const stat = await fs.stat(resolved)
     if (stat.isDirectory()) {
-      respond(res, 200, 'application/json', JSON.stringify({ ok: true, exists: true }))
+      respond(res, 200, 'application/json', JSON.stringify({ ok: true, exists: true, resolved }))
     } else {
       respond(res, 200, 'application/json', JSON.stringify({ ok: false, error: 'Path exists but is not a directory' }))
     }
@@ -191,7 +202,7 @@ async function checkPath(req, res, { configDir }) {
     while (ancestor !== path.dirname(ancestor)) {
       try {
         await fs.access(ancestor, fs.constants.W_OK)
-        return respond(res, 200, 'application/json', JSON.stringify({ ok: true, exists: false }))
+        return respond(res, 200, 'application/json', JSON.stringify({ ok: true, exists: false, resolved }))
       } catch (e) {
         if (e.code !== 'ENOENT') break
         ancestor = path.dirname(ancestor)

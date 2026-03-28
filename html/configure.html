@@ -286,7 +286,9 @@
             <label for="store-type">Type</label>
             <select id="store-type" name="store.type">
               <option value="directory">directory</option>
-              <option value="database">database</option>
+              <option value="mysql">mysql</option>
+              <option value="mongodb" disabled>mongodb (coming soon)</option>
+              <option value="elasticsearch" disabled>elasticsearch (coming soon)</option>
             </select>
           </div>
           <!-- directory: single path field -->
@@ -555,7 +557,10 @@
           ? (data.exists ? 'Directory exists' : 'Will be created')
           : (data.error || 'Invalid path')
         setField('store-path', 'n-store-path', data.ok, data.ok ? '' : msg)
-        if (data.ok) document.getElementById('n-store-path').textContent = msg
+        if (data.ok) {
+          document.getElementById('n-store-path').textContent = msg
+          if (data.resolved) document.getElementById('store-path').value = data.resolved
+        }
       } catch {
         _pathCheckOk = false
         setField('store-path', 'n-store-path', false, 'Could not verify path')
@@ -731,22 +736,31 @@
     const storeType = document.getElementById('store-type').value
     const store = { type: storeType }
 
-    if (storeType === 'directory') {
-      store.path = document.getElementById('store-path').value.trim()
-    } else {
-      store.host     = document.getElementById('db-host').value.trim()
+    // Always persist all configured values regardless of active type,
+    // so switching between types doesn't lose the other type's settings.
+    const pathVal = document.getElementById('store-path').value.trim()
+    if (pathVal) store.path = pathVal
+
+    const dbHost = document.getElementById('db-host').value.trim()
+    if (dbHost) {
+      store.host     = dbHost
       store.port     = Number(document.getElementById('db-port').value) || 3306
       store.user     = document.getElementById('db-user').value.trim()
       store.password = document.getElementById('db-password').value
       store.database = document.getElementById('db-name').value.trim()
+      store.dsn      = dsnFromFields()
     }
 
+    const apiLocalEl = document.getElementById('api-run-local')
+    const startVal = apiLocalEl.offsetParent !== null ? apiLocalEl.checked : undefined
+    const api = {
+      host: document.getElementById('api-host').value.trim(),
+      port: Number(document.getElementById('api-port').value),
+    }
+    if (startVal !== undefined) api.start = startVal
     const config = {
       store,
-      api: {
-        host: document.getElementById('api-host').value.trim(),
-        port: Number(document.getElementById('api-port').value),
-      },
+      api,
       nameserver: [],
     }
 
@@ -776,20 +790,28 @@
 
     if (c.store) {
       document.getElementById('store-type').value = c.store.type || 'directory'
-      if (c.store.type === 'database') {
-        document.getElementById('db-host').value     = c.store.host     || ''
-        document.getElementById('db-port').value     = c.store.port     || '3306'
-        document.getElementById('db-user').value     = c.store.user     || ''
-        document.getElementById('db-password').value = c.store.password || ''
-        document.getElementById('db-name').value     = c.store.database || ''
-        document.getElementById('db-dsn').value      = dsnFromFields()
-      } else {
-        document.getElementById('store-path').value = c.store.path || ''
+      // Always populate all fields so switching types doesn't lose saved values
+      if (c.store.path) document.getElementById('store-path').value = c.store.path
+      if (c.store.host || c.store.dsn) {
+        if (c.store.host) {
+          document.getElementById('db-host').value     = c.store.host
+          document.getElementById('db-port').value     = c.store.port     || '3306'
+          document.getElementById('db-user').value     = c.store.user     || ''
+          document.getElementById('db-password').value = c.store.password || ''
+          document.getElementById('db-name').value     = c.store.database || ''
+          document.getElementById('db-dsn').value      = c.store.dsn || dsnFromFields()
+        } else if (c.store.dsn) {
+          document.getElementById('db-dsn').value = c.store.dsn
+          fieldsFromDsn(c.store.dsn)
+        }
       }
     }
     if (c.api) {
       document.getElementById('api-host').value = c.api.host || ''
       document.getElementById('api-port').value = c.api.port || ''
+      if (c.api.start !== undefined) {
+        document.getElementById('api-run-local').checked = c.api.start
+      }
     }
 
     const nameservers = Array.isArray(c.nameserver) && c.nameserver.length ? c.nameserver : null
@@ -903,7 +925,11 @@
     }
 
     const toggle = document.getElementById('api-run-local')
-    if (svc?.api != null) toggle.checked = svc.api.running
+    if (data?.api?.start !== undefined) {
+      toggle.checked = data.api.start
+    } else if (svc?.api != null) {
+      toggle.checked = svc.api.running
+    }
 
     validateAll()
   }).catch(() => { addNsRow(); validateAll() })
