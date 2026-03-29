@@ -7,21 +7,22 @@ let userDataTable;
 const zoneRecordDataTables = new Map();
 const zoneColumnSearchTimers = new Map();
 const RR_DATA_PREVIEW_CHARS = 72;
-const DANGEROUS_MODE_COOKIE = "nt-dangerous-mode";
+const CONFIRM_DELETES_COOKIE = "nt-confirm-deletes";
 let activeZoneRecordContext;
 
-function isDangerousModeEnabled() {
-  return Cookie.get(DANGEROUS_MODE_COOKIE) === "1";
+function isConfirmDeletesEnabled() {
+  // Default ON (confirm) when no cookie set; cookie "0" means skip confirms
+  return Cookie.get(CONFIRM_DELETES_COOKIE) !== "0";
 }
 
 function initDangerousModeToggle() {
   const toggle = document.getElementById("dangerousModeToggle");
   if (!toggle || toggle.dataset.initialized === "true") return;
 
-  toggle.checked = isDangerousModeEnabled();
+  toggle.checked = isConfirmDeletesEnabled();
   toggle.dataset.initialized = "true";
   toggle.addEventListener("change", () => {
-    Cookie.set(DANGEROUS_MODE_COOKIE, toggle.checked ? "1" : "0", { days: 365 });
+    Cookie.set(CONFIRM_DELETES_COOKIE, toggle.checked ? "1" : "0", { days: 365 });
   });
 }
 
@@ -54,42 +55,95 @@ function formatZoneRecordTtl(ttl) {
   return ttl === 0 || ttl === undefined || ttl === null ? "" : `${ttl}`;
 }
 
-const RR_PLACEHOLDERS = {
-  A:          { owner: 'host',        address: '192.0.99.5' },
-  AAAA:       { owner: 'host',        address: '2001:db8:f00d::2' },
-  CAA:        { owner: '',            address: '' },
-  CNAME:      { owner: 'host',        address: 'fqdn.example.com.' },
-  DNAME:      { owner: 'subdomain',   address: 'fqdn.example.com.' },
-  HINFO:      { owner: 'host',        address: 'CPU OS' },
-  LOC:        { owner: 'host',        address: '47 43 47.000 N 122 21 35.000 W 132.00m 100m 100m 2m' },
-  MX:         { owner: '@',           address: 'mail.example.com.' },
-  NAPTR:      { owner: '',            address: '"" "" "/urn:cid:.+@([^\\.]+\\.)(.*)$/\\2/i"' },
-  NS:         { owner: 'subdomain',   address: 'ns1.example.com.' },
-  NSEC:       { owner: '',            address: 'host.example.com.' },
-  NSEC3:      { owner: '',            address: '1 1 12 aabbccdd ( 2t7b4g4vsa5smi47k61mv5bv1a22bojr MX DNSKEY NS SOA NSEC3PARAM RRSIG )' },
-  NSEC3PARAM: { owner: '',            address: '1 1 12 aa99ffdd' },
-  PTR:        { owner: '',            address: 'host.example.com.' },
-  RRSIG:      { owner: '',            address: 'A 5 3 86400 20030322173103 ( 20030220173103 2642 example.com. oJB1W6...)' },
-  SPF:        { owner: '@',           address: 'v=spf1 mx a -all' },
-  SRV:        { owner: '_dns._udp',   address: 'ns1.example.com.' },
-  SSHFP:      { owner: 'host',        address: '' },
-  TXT:        { owner: '',            address: '' },
-  URI:        { owner: '_ftp._tcp',   address: 'ftp://ftp1.example.com/public' },
+let currentGroupId = null;
+let rootGroupId = null;
+let groupHistory = []; // stack of { id, name } for breadcrumb navigation
+let zoneDefaults = { ttl: 86400, refresh: 16384, retry: 900, expire: 1048576, minimum: 2560 };
+
+function fieldToId(field) {
+  return field.replace(/\s+/g, "-");
+}
+
+function secondsToHuman(secs) {
+  const n = parseInt(secs, 10);
+  if (!Number.isFinite(n) || n < 0) return "";
+  if (n === 0) return "0s";
+  const units = [
+    [604800, "w", 1],
+    [86400,  "d", 1],
+    [3600,   "h", 1],
+    [60,     "m", 0],
+    [1,      "s", 0],
+  ];
+  for (const [div, unit, decimals] of units) {
+    if (n >= div) {
+      const val = n / div;
+      const factor = Math.pow(10, decimals);
+      const rounded = Math.round(val * factor) / factor;
+      return `${rounded}${unit}`;
+    }
+  }
+  return `${n}s`;
+}
+
+function parseHumanTime(raw) {
+  const s = `${raw ?? ""}`.trim();
+  if (/^\d+$/.test(s)) return parseInt(s, 10);
+  const match = s.match(/^(\d+(?:\.\d+)?)\s*([smhdwSMHDW])$/);
+  if (!match) return null;
+  const val = parseFloat(match[1]);
+  const unit = match[2].toLowerCase();
+  const multipliers = { s: 1, m: 60, h: 3600, d: 86400, w: 604800 };
+  return Math.round(val * multipliers[unit]);
+}
+
+function attachTimeField(inputId, displayId) {
+  const input = document.getElementById(inputId);
+  const display = document.getElementById(displayId);
+  if (!input || !display) return;
+  if (input.dataset.timeAttached === "true") {
+    // Just update display for new value
+    const parsed = parseHumanTime(input.value);
+    display.textContent = parsed !== null ? secondsToHuman(parsed) : "";
+    return;
+  }
+  input.dataset.timeAttached = "true";
+
+  const update = () => {
+    const parsed = parseHumanTime(input.value);
+    display.textContent = parsed !== null ? secondsToHuman(parsed) : "";
+  };
+
+  input.addEventListener("blur", () => {
+    const parsed = parseHumanTime(input.value);
+    if (parsed !== null && !/^\d+$/.test(input.value.trim())) {
+      input.value = String(parsed);
+    }
+    update();
+  });
+  input.addEventListener("input", update);
+  update();
 }
 
 function setRRTypePlaceholders(type) {
-  const p = RR_PLACEHOLDERS[type] ?? {}
+  if (!RR[type]) return
+
+  const rr = new RR[type](null)
+  const canonical = rr.getCanonical()
 
   const ownerEl = document.getElementById("zrEditOwner")
-  if (ownerEl && p.owner !== undefined) ownerEl.placeholder = p.owner
+  if (ownerEl && canonical.owner !== undefined) ownerEl.placeholder = canonical.owner
 
-  if (p.address !== undefined) {
-    // rdata fields are generated as zrEdit${fieldName}; try 'address' first,
-    // then fall back to the first text input in the rdata container
-    const addrEl =
-      document.getElementById("zrEditaddress") ??
-      document.querySelector("#zrEditRdata input[type='text'], #zrEditRdata textarea")
-    if (addrEl) addrEl.placeholder = p.address
+  for (const field of rr.getRdataFields()) {
+    const val = canonical[field]
+    if (val === undefined) continue
+    const eid = `zrEdit${fieldToId(field)}`
+    const el = document.getElementById(eid)
+    if (el) {
+      el.placeholder = String(val)
+      const helpEl = document.getElementById(`zrEdit${rr.ucFirst(field)}Help`)
+      if (helpEl && !helpEl.textContent) helpEl.textContent = `e.g. ${val}`
+    }
   }
 }
 
@@ -221,6 +275,8 @@ function onLoad() {
   initZoneRecordModalActions();
   initZoneControls();
   initDangerousModeToggle();
+  initNsControls();
+  initUserControls();
 
   if (!Cookie.get("nt-token")) {
     console.log(`Cookie/token not found`);
@@ -254,29 +310,144 @@ function onLoad() {
     });
 }
 
+async function loadGroupMenu(gid, name) {
+  const groupMenu = document.getElementById("group_dropdown_menu");
+  if (!groupMenu) return;
+
+  groupMenu.innerHTML = "";
+
+  if (groupHistory.length > 0) {
+    const parent = groupHistory[groupHistory.length - 1];
+    const backLi = document.createElement("li");
+    backLi.innerHTML = `<a class="dropdown-item text-secondary small" href="#" data-group-back="true">← ${escapeHtml(parent.name)}</a>`;
+    groupMenu.appendChild(backLi);
+    const sep = document.createElement("li");
+    sep.innerHTML = '<hr class="dropdown-divider my-1">';
+    groupMenu.appendChild(sep);
+  }
+
+  const currentLi = document.createElement("li");
+  currentLi.innerHTML = `<a class="dropdown-item active" href="#" data-group-id="${gid}">${escapeHtml(name)}</a>`;
+  groupMenu.appendChild(currentLi);
+
+  try {
+    const res = await ajax({ method: "GET", url: `${API_URI}/group?parent_gid=${gid}` });
+    const subgroups = res?.group ?? [];
+    if (subgroups.length === 0) return;
+
+    const divider = document.createElement("li");
+    divider.innerHTML = '<hr class="dropdown-divider my-1">';
+    groupMenu.appendChild(divider);
+
+    // Fetch sub-subgroups in parallel to know which items have children
+    const childResults = await Promise.all(
+      subgroups.map(g =>
+        ajax({ method: "GET", url: `${API_URI}/group?parent_gid=${g.id}` })
+          .then(r => ({ id: g.id, children: r?.group ?? [] }))
+          .catch(() => ({ id: g.id, children: [] }))
+      )
+    );
+    const childrenMap = new Map(childResults.map(s => [s.id, s.children]));
+
+    for (const g of subgroups) {
+      const children = childrenMap.get(g.id) ?? [];
+      const hasChildren = children.length > 0;
+      const li = document.createElement("li");
+
+      if (hasChildren) {
+        li.className = "has-submenu";
+        li.innerHTML = `<a class="dropdown-item" href="#" data-group-id="${g.id}" data-group-name="${escapeHtml(g.name)}"><span class="text-body-tertiary me-2">▸</span>${escapeHtml(g.name)}</a>`;
+        const submenu = document.createElement("ul");
+        submenu.className = "group-submenu dropdown-menu";
+        for (const c of children) {
+          const cLi = document.createElement("li");
+          cLi.innerHTML = `<a class="dropdown-item" href="#" data-group-id="${c.id}" data-group-name="${escapeHtml(c.name)}" data-group-parent-id="${g.id}" data-group-parent-name="${escapeHtml(g.name)}">${escapeHtml(c.name)}</a>`;
+          submenu.appendChild(cLi);
+        }
+        li.appendChild(submenu);
+      } else {
+        li.innerHTML = `<a class="dropdown-item" href="#" data-group-id="${g.id}" data-group-name="${escapeHtml(g.name)}">${escapeHtml(g.name)}</a>`;
+      }
+      groupMenu.appendChild(li);
+    }
+  } catch (err) {
+    console.error("Failed to load group menu:", err);
+  }
+}
+
+function switchGroup(gid, name) {
+  currentGroupId = gid;
+  const groupLabel = document.getElementById("group_dropdown_label");
+  if (groupLabel) groupLabel.textContent = name;
+  loadGroupMenu(gid, name);
+  if (zoneDataTable) {
+    zoneDataTable.ajax.reload(null, true);
+  } else {
+    showZones();
+  }
+  showNameservers();
+  showUsers();
+}
+
 function onLoggedIn(response) {
   document.getElementById("login_div").style.display = "none";
   document.getElementById("loggedInMain").style.display = "block";
   document.getElementById("loggedInMain").classList.add("show");
 
+  currentGroupId = response.group?.id ?? null;
+  rootGroupId = currentGroupId;
+  groupHistory = [];
+
   const groupLabel = document.getElementById("group_dropdown_label");
   const groupMenu = document.getElementById("group_dropdown_menu");
   if (groupLabel && groupMenu) {
     groupLabel.textContent = response.group?.name ?? "Group";
-    groupMenu.innerHTML = "";
 
-    const groupItem = document.createElement("li");
-    groupItem.innerHTML = `<a class="dropdown-item active" href="#" data-group-id="${response.group?.id ?? ""}">${response.group?.name ?? "Group"}</a>`;
-    groupMenu.appendChild(groupItem);
+    if (!groupMenu.dataset.clickInitialized) {
+      groupMenu.dataset.clickInitialized = "true";
+      groupMenu.addEventListener("click", (e) => {
+        const a = e.target.closest("a[data-group-id], a[data-group-back]");
+        if (!a) return;
+        e.preventDefault();
+
+        if (a.dataset.groupBack) {
+          const prev = groupHistory.pop();
+          if (!prev) return;
+          currentGroupId = prev.id;
+          if (groupLabel) groupLabel.textContent = prev.name;
+          loadGroupMenu(prev.id, prev.name);
+          if (zoneDataTable) zoneDataTable.ajax.reload(null, true); else showZones();
+          showNameservers();
+          return;
+        }
+
+        const gid = parseInt(a.dataset.groupId, 10);
+        const label = a.dataset.groupName || a.textContent.replace("▸", "").trim();
+
+        if (a.dataset.groupParentId) {
+          // Submenu item — push current group AND intermediate parent to history
+          const parentId = parseInt(a.dataset.groupParentId, 10);
+          const parentName = a.dataset.groupParentName ?? "";
+          groupHistory.push({ id: currentGroupId, name: groupLabel.textContent });
+          groupHistory.push({ id: parentId, name: parentName });
+          switchGroup(gid, label);
+        } else {
+          if (gid === currentGroupId) return;
+          groupHistory.push({ id: currentGroupId, name: groupLabel.textContent });
+          switchGroup(gid, label);
+        }
+      });
+    }
+
+    if (currentGroupId) loadGroupMenu(currentGroupId, response.group?.name ?? "Group");
   }
 
-  // ajax({
-  //     method: 'GET',
-  //     url: `${API_URI}/permission/${response.user.id}`,
-  // })
-  // .then((response) => {
-  //     console.log('GET /permission response', response);
-  // })
+  fetch("/api/config")
+    .then((r) => r.json())
+    .then((cfg) => {
+      if (cfg?.zone) zoneDefaults = { ...zoneDefaults, ...cfg.zone };
+    })
+    .catch(() => {});
 
   showNameservers();
   showZones();
@@ -295,10 +466,11 @@ function onLoggedOut() {
   document.getElementById("login_div").style.display = "block";
 }
 
+const ZONE_SUBGROUPS_COOKIE = "nt-zone-include-subgroups";
+
 function initZoneControls() {
   const deletedToggle = document.getElementById("zoneSearchDeleted");
   if (!deletedToggle || deletedToggle.dataset.initialized === "true") return;
-
   deletedToggle.dataset.initialized = "true";
   deletedToggle.addEventListener("change", () => {
     if (!zoneDataTable) return;
@@ -353,15 +525,17 @@ function attemptLogout() {
 }
 
 function showNameservers() {
+  const params = new URLSearchParams();
+  if (currentGroupId) params.set("gid", `${currentGroupId}`);
+  if (document.getElementById("nsShowDeleted")?.checked) params.set("deleted", "true");
+
   ajax({
     method: "GET",
-    url: `${API_URI}/nameserver`,
+    url: `${API_URI}/nameserver?${params.toString()}`,
   }).then((response) => {
-    console.log("GET /nameserver response", response);
     const table = document.getElementById("ns_table");
     const tableHead = table.querySelector("thead");
 
-    // Remove existing filter row before re-initializing.
     while (tableHead.rows.length > 1) {
       tableHead.deleteRow(1);
     }
@@ -374,7 +548,7 @@ function showNameservers() {
     const body = table.querySelector("tbody");
     body.innerHTML = "";
 
-    const sorted = response.nameserver
+    const sorted = (response.nameserver ?? [])
       .slice()
       .sort((a, b) => Number(a.id) - Number(b.id));
 
@@ -382,14 +556,16 @@ function showNameservers() {
       const row = document.createElement("tr");
       row.classList.add("accordion-item");
       row.id = `ns_${ns.id}_tr`;
+      if (ns.deleted) row.classList.add("text-body-secondary");
       row.innerHTML = `
-                <td>${ns.name ?? ""}</td>
-                <td>${ns.description ?? ""}</td>
-                <td style="text-align: right;">${ns.address ?? ""}</td>
-                <td style="text-align: right;">${ns.address6 ?? ""}</td>
-                <td style="text-align: center">${ns.export?.type ?? ""}</td>
-                <td style="text-align: center"><button type="button" class="btn btn-sm btn-outline-secondary">⛭</button></td>
-            `;
+        <td>${escapeHtml(ns.name ?? "")}</td>
+        <td>${escapeHtml(ns.description ?? "")}</td>
+        <td style="text-align: right;">${escapeHtml(ns.address ?? "")}</td>
+        <td style="text-align: right;">${escapeHtml(ns.address6 ?? "")}</td>
+        <td style="text-align: center">${escapeHtml(ns.export?.type ?? "")}</td>
+        <td style="text-align: center"><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 ns-edit-btn" style="text-decoration:none;font-size:0.9rem;line-height:1;" aria-label="Edit nameserver">✎</button></td>
+      `;
+      row.querySelector(".ns-edit-btn").addEventListener("click", () => openNsPane(ns));
       body.appendChild(row);
     }
 
@@ -410,6 +586,7 @@ function showNameservers() {
       orderCellsTop: true,
       pageLength: 25,
       lengthMenu: [10, 25, 50, 100],
+      layout: { topEnd: null },
       columnDefs: [
         { orderable: false, searchable: false, targets: [5] },
       ],
@@ -418,22 +595,98 @@ function showNameservers() {
         api.columns().every(function (index) {
           const input = filterRow.cells[index].querySelector("input");
           if (!input) return;
-
           input.addEventListener("input", () => {
-            if (this.search() !== input.value) {
-              this.search(input.value).draw();
-            }
+            if (this.search() !== input.value) this.search(input.value).draw();
           });
         });
+        const actionsCell = filterRow.cells[filterRow.cells.length - 1];
+        const createBtn = document.createElement("button");
+        createBtn.type = "button";
+        createBtn.className = "btn btn-sm btn-outline-secondary";
+        createBtn.textContent = "+ Create";
+        createBtn.addEventListener("click", () => openNsPane(null));
+        actionsCell.appendChild(createBtn);
       },
     });
   });
 }
 
+let activeNsContext = null;
+
+function openNsPane(ns) {
+  activeNsContext = ns ? { mode: "edit", ns } : { mode: "create" };
+  const isCreate = !ns;
+  document.getElementById("nsEditPaneLabel").textContent = isCreate ? "Create Nameserver" : "Edit Nameserver";
+  document.getElementById("nsEditName").value        = ns?.name        ?? "";
+  document.getElementById("nsEditDescription").value = ns?.description ?? "";
+  document.getElementById("nsEditTtl").value         = ns?.ttl         ?? 86400;
+  document.getElementById("nsEditAddress").value     = ns?.address     ?? "";
+  document.getElementById("nsEditAddress6").value    = ns?.address6    ?? "";
+  document.getElementById("nsEditExportType").value  = ns?.export?.type ?? "bind";
+  document.getElementById("nsEditSaveBtn").textContent = isCreate ? "Create" : "Save";
+  bootstrap.Offcanvas.getOrCreateInstance(document.getElementById("nsEditPane")).show();
+}
+
+function initNsControls() {
+  const deletedToggle = document.getElementById("nsShowDeleted");
+  if (deletedToggle && !deletedToggle.dataset.initialized) {
+    deletedToggle.dataset.initialized = "true";
+    deletedToggle.addEventListener("change", () => showNameservers());
+  }
+
+  const saveBtn = document.getElementById("nsEditSaveBtn");
+  if (saveBtn && !saveBtn.dataset.initialized) {
+    saveBtn.dataset.initialized = "true";
+    saveBtn.addEventListener("click", async () => {
+      const ctx = activeNsContext;
+      if (!ctx) return;
+
+      const name = document.getElementById("nsEditName").value.trim();
+      if (!name) { alert("Name is required."); return; }
+
+      const ttlRaw = parseInt(document.getElementById("nsEditTtl").value, 10);
+      const payload = {
+        name,
+        description: document.getElementById("nsEditDescription").value.trim(),
+        ttl: Number.isFinite(ttlRaw) ? ttlRaw : 86400,
+        address:  document.getElementById("nsEditAddress").value.trim() || undefined,
+        address6: document.getElementById("nsEditAddress6").value.trim() || undefined,
+        export: { type: document.getElementById("nsEditExportType").value },
+      };
+      if (ctx.mode === "create") payload.gid = currentGroupId;
+
+      const method = ctx.mode === "create" ? "POST" : "PUT";
+      const url    = ctx.mode === "create"
+        ? `${API_URI}/nameserver`
+        : `${API_URI}/nameserver/${ctx.ns.id}`;
+
+      saveBtn.disabled = true;
+      try {
+        const response = await ajax({ method, url, payload });
+        if (!response || response?.error) {
+          alert(response?.message ?? "Save failed. See console for details.");
+          return;
+        }
+        bootstrap.Offcanvas.getOrCreateInstance(document.getElementById("nsEditPane")).hide();
+        showNameservers();
+      } catch (err) {
+        console.error("NS save failed:", err);
+        alert("Save failed due to a network error.");
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+  }
+}
+
 function showUsers() {
+  const params = new URLSearchParams();
+  if (currentGroupId) params.set("gid", `${currentGroupId}`);
+  if (document.getElementById("userShowDeleted")?.checked) params.set("deleted", "true");
+
   ajax({
     method: "GET",
-    url: `${API_URI}/user`,
+    url: `${API_URI}/user${params.toString() ? "?" + params.toString() : ""}`,
   }).then((response) => {
     const table = document.getElementById("user_table");
     const tableHead = table.querySelector("thead");
@@ -457,13 +710,15 @@ function showUsers() {
     for (const u of sorted) {
       const row = document.createElement("tr");
       row.id = `user_${u.id}_tr`;
+      if (u.deleted) row.classList.add("text-body-secondary");
       row.innerHTML = `
-        <td>${u.username ?? ""}</td>
-        <td>${u.first_name ?? ""} ${u.last_name ?? ""}</td>
-        <td>${u.email ?? ""}</td>
+        <td>${escapeHtml(u.username ?? "")}</td>
+        <td>${escapeHtml((u.first_name ?? "") + (u.last_name ? " " + u.last_name : ""))}</td>
+        <td>${escapeHtml(u.email ?? "")}</td>
         <td style="text-align: center">${u.is_admin ? "✓" : ""}</td>
-        <td style="text-align: center"><button type="button" class="btn btn-sm btn-outline-secondary">⛭</button></td>
+        <td style="text-align: center"><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 user-edit-btn" style="text-decoration:none;font-size:0.9rem;line-height:1;" aria-label="Edit user">✎</button></td>
       `;
+      row.querySelector(".user-edit-btn").addEventListener("click", () => openUserPane(u));
       body.appendChild(row);
     }
 
@@ -481,6 +736,7 @@ function showUsers() {
       orderCellsTop: true,
       pageLength: 25,
       lengthMenu: [10, 25, 50, 100],
+      layout: { topEnd: null },
       columnDefs: [
         { orderable: false, searchable: false, targets: [4] },
       ],
@@ -493,9 +749,87 @@ function showUsers() {
             if (this.search() !== input.value) this.search(input.value).draw();
           });
         });
+        const actionsCell = filterRow.cells[filterRow.cells.length - 1];
+        const createBtn = document.createElement("button");
+        createBtn.type = "button";
+        createBtn.className = "btn btn-sm btn-outline-secondary";
+        createBtn.textContent = "+ Create";
+        createBtn.addEventListener("click", () => openUserPane(null));
+        actionsCell.appendChild(createBtn);
       },
     });
   });
+}
+
+let activeUserContext = null;
+
+function openUserPane(user) {
+  activeUserContext = user ? { mode: "edit", user } : { mode: "create" };
+  const isCreate = !user;
+  document.getElementById("userEditPaneLabel").textContent = isCreate ? "Create User" : "Edit User";
+  document.getElementById("userEditUsername").value   = user?.username   ?? "";
+  document.getElementById("userEditFirstName").value  = user?.first_name ?? "";
+  document.getElementById("userEditLastName").value   = user?.last_name  ?? "";
+  document.getElementById("userEditEmail").value      = user?.email      ?? "";
+  document.getElementById("userEditPassword").value   = "";
+  document.getElementById("userEditIsAdmin").checked  = user?.is_admin   ?? false;
+  document.getElementById("userEditSaveBtn").textContent = isCreate ? "Create" : "Save";
+  bootstrap.Offcanvas.getOrCreateInstance(document.getElementById("userEditPane")).show();
+}
+
+function initUserControls() {
+  const deletedToggle = document.getElementById("userShowDeleted");
+  if (deletedToggle && !deletedToggle.dataset.initialized) {
+    deletedToggle.dataset.initialized = "true";
+    deletedToggle.addEventListener("change", () => showUsers());
+  }
+
+  const saveBtn = document.getElementById("userEditSaveBtn");
+  if (saveBtn && !saveBtn.dataset.initialized) {
+    saveBtn.dataset.initialized = "true";
+    saveBtn.addEventListener("click", async () => {
+      const ctx = activeUserContext;
+      if (!ctx) return;
+
+      const username = document.getElementById("userEditUsername").value.trim();
+      if (!username) { alert("Username is required."); return; }
+
+      const payload = {
+        username,
+        is_admin: document.getElementById("userEditIsAdmin").checked,
+      };
+      const firstName = document.getElementById("userEditFirstName").value.trim();
+      const lastName  = document.getElementById("userEditLastName").value.trim();
+      const email     = document.getElementById("userEditEmail").value.trim();
+      const password  = document.getElementById("userEditPassword").value;
+      if (firstName) payload.first_name = firstName;
+      if (lastName)  payload.last_name  = lastName;
+      if (email)     payload.email      = email;
+      if (password)  payload.password   = password;
+      if (ctx.mode === "create") payload.gid = currentGroupId;
+
+      const method = ctx.mode === "create" ? "POST" : "PUT";
+      const url    = ctx.mode === "create"
+        ? `${API_URI}/user`
+        : `${API_URI}/user/${ctx.user.id}`;
+
+      saveBtn.disabled = true;
+      try {
+        const response = await ajax({ method, url, payload });
+        if (!response || response?.error) {
+          alert(response?.message ?? "Save failed. See console for details.");
+          return;
+        }
+        bootstrap.Offcanvas.getOrCreateInstance(document.getElementById("userEditPane")).hide();
+        showUsers();
+      } catch (err) {
+        console.error("User save failed:", err);
+        alert("Save failed due to a network error.");
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+  }
 }
 
 function showZones() {
@@ -533,6 +867,7 @@ function showZones() {
     orderCellsTop: true,
     pageLength: 25,
     lengthMenu: [10, 25, 50, 100],
+    layout: { topEnd: null },
     columnDefs: [{ orderable: false, searchable: false, targets: [0, 3] }],
     order: [[1, "asc"]],
     columns: [
@@ -557,6 +892,8 @@ function showZones() {
 
       const includeDeleted = document.getElementById("zoneSearchDeleted")?.checked === true;
       if (includeDeleted) params.set("deleted", "true");
+      if (currentGroupId) params.set("gid", `${currentGroupId}`);
+      if (document.getElementById("zoneIncludeSubgroups")?.checked) params.set("include_subgroups", "true");
 
       const globalSearch = `${data.search?.value ?? ""}`.trim();
       if (globalSearch) params.set("search", globalSearch);
@@ -603,10 +940,30 @@ function showZones() {
     },
     initComplete() {
       const api = this.api();
-      api.columns().every(function (index) {
-        const input = filterRow.cells[index].querySelector("input");
-        if (!input) return;
 
+      // Rebuild Zone column cell with search input + subgroups toggle on the same line
+      const zoneSearchCell = filterRow.cells[1];
+      if (zoneSearchCell && !document.getElementById("zoneIncludeSubgroups")) {
+        zoneSearchCell.innerHTML = `
+          <div class="d-flex align-items-center gap-2">
+            <input type="search" class="form-control form-control-sm" placeholder="Search Zone" aria-label="Search Zone" style="min-width:0;flex:1 1 auto;">
+            <div class="form-check form-switch mb-0 text-nowrap flex-shrink-0">
+              <input class="form-check-input" type="checkbox" role="switch" id="zoneIncludeSubgroups" style="cursor:pointer;">
+              <label class="form-check-label small text-body-secondary" for="zoneIncludeSubgroups">Subgroups</label>
+            </div>
+          </div>`;
+        const subgroupToggle = document.getElementById("zoneIncludeSubgroups");
+        subgroupToggle.checked = Cookie.get(ZONE_SUBGROUPS_COOKIE) === "1";
+        subgroupToggle.addEventListener("change", () => {
+          Cookie.set(ZONE_SUBGROUPS_COOKIE, subgroupToggle.checked ? "1" : "0", { days: 365 });
+          if (zoneDataTable) zoneDataTable.ajax.reload(null, true);
+        });
+      }
+
+      // Bind column search inputs (after cell rebuild so the final inputs are found)
+      api.columns().every(function (index) {
+        const input = filterRow.cells[index].querySelector("input[type='search']");
+        if (!input) return;
         input.addEventListener("input", () => {
           clearTimeout(zoneColumnSearchTimers.get(index));
           zoneColumnSearchTimers.set(
@@ -619,6 +976,17 @@ function showZones() {
           );
         });
       });
+
+      // Add "+ Create Zone" button to Actions column of filter row
+      const actionsCell = filterRow.cells[filterRow.cells.length - 1];
+      const createBtn = document.createElement("button");
+      createBtn.type = "button";
+      createBtn.className = "btn btn-sm btn-outline-secondary";
+      createBtn.title = "Create new zone";
+      createBtn.setAttribute("aria-label", "Create new zone");
+      createBtn.textContent = "+ Create";
+      createBtn.addEventListener("click", () => openCreateZoneModal());
+      actionsCell.appendChild(createBtn);
     },
   });
 
@@ -658,7 +1026,7 @@ function showZones() {
       const zone = row.data();
       if (!zone) return;
 
-      if (!isDangerousModeEnabled()) {
+      if (isConfirmDeletesEnabled()) {
         const confirmed = window.confirm(
           `Delete zone ${zone.zone}? This hides it from default views.`,
         );
@@ -713,6 +1081,7 @@ function showZones() {
             <table id="zone_${zone.id}_table" class="table table-md table-striped table-hover table-bordered zone-records-table">
                         <thead>
                             <tr>
+                                <th style="display:none"></th>
                                 <th>Name</th>
                                 <th>Type</th>
                                 <th>TTL</th>
@@ -730,6 +1099,21 @@ function showZones() {
   };
 }
 
+function syntheticOwnerDisplay(owner, zone) {
+  const zoneFqdn = `${zone.zone}`.endsWith(".") ? zone.zone : `${zone.zone}.`;
+  return owner === zoneFqdn ? "@" : owner;
+}
+
+function unqualifyHost(host, zoneFqdn) {
+  if (!host) return host;
+  const fqdn = zoneFqdn.endsWith(".") ? zoneFqdn : `${zoneFqdn}.`;
+  const h    = host.endsWith(".")    ? host    : `${host}.`;
+  if (h === fqdn) return "@";
+  const suffix = `.${fqdn}`;
+  if (h.endsWith(suffix)) return h.slice(0, -suffix.length);
+  return h;
+}
+
 function buildSyntheticSoaRow(zone) {
   const zoneFqdn = `${zone.zone}`.endsWith(".") ? zone.zone : `${zone.zone}.`;
   const mname = Array.isArray(zone.nameservers) && zone.nameservers.length
@@ -743,16 +1127,36 @@ function buildSyntheticSoaRow(zone) {
   const retry   = zone.retry   ?? 7200;
   const expire  = zone.expire  ?? 1209600;
   const minimum = zone.minimum ?? 3600;
-  const rdata = `${mname} ${rname} ${serial} ${refresh} ${retry} ${expire} ${minimum}`;
+  const rdata = `${unqualifyHost(mname, zoneFqdn)} ${unqualifyHost(rname, zoneFqdn)} ${serial} ${refresh} ${retry} ${expire} ${minimum}`;
 
   const row = document.createElement("tr");
   row.classList.add("zone-record-soa");
   row.innerHTML = `
-    <td class="small text-muted">${escapeHtml(zoneFqdn)}</td>
+    <td style="display:none">0</td>
+    <td class="small text-muted">@</td>
     <td class="small text-muted">SOA</td>
     <td class="small text-muted">${escapeHtml(formatZoneRecordTtl(zone.ttl))}</td>
     <td class="small text-muted" style="width: 50%;">
       <span class="text-truncate" style="display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(rdata)}">${escapeHtml(rdata)}</span>
+    </td>
+    <td class="small text-center"></td>
+  `;
+  return row;
+}
+
+function buildSyntheticNsRow(zr, zone) {
+  const zoneFqdn = `${zone.zone}`.endsWith(".") ? zone.zone : `${zone.zone}.`;
+  const ownerDisplay = escapeHtml(syntheticOwnerDisplay(zr.owner, zone));
+  const rdata = escapeHtml(unqualifyHost(zr.dname ?? "", zoneFqdn));
+  const row = document.createElement("tr");
+  row.classList.add("zone-record-synthetic");
+  row.innerHTML = `
+    <td style="display:none">1</td>
+    <td class="small text-muted">${ownerDisplay}</td>
+    <td class="small text-muted">NS</td>
+    <td class="small text-muted">${escapeHtml(formatZoneRecordTtl(zr.ttl))}</td>
+    <td class="small text-muted" style="width: 50%;">
+      <span class="text-truncate" style="display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${rdata}">${rdata}</span>
     </td>
     <td class="small text-center"></td>
   `;
@@ -775,37 +1179,43 @@ function showZoneRecords(zone) {
 
   tbody.appendChild(buildSyntheticSoaRow(zone));
 
-  ajax({
-    method: "GET",
-    url: `${API_URI}/zone_record/?zid=${zone.id}`,
-  }).then((response) => {
+  Promise.all([
+    ajax({ method: "GET", url: `${API_URI}/zone_record/?zid=${zone.id}` }),
+    ajax({ method: "GET", url: `${API_URI}/zone/${zone.id}/ns` }),
+  ]).then(([response, nsResponse]) => {
+    for (const ns of nsResponse?.ns ?? []) {
+      tbody.appendChild(buildSyntheticNsRow(ns, zone));
+    }
+
     // console.log('GET /zone_record response', response);
 
+    const zoneFqdn = `${zone.zone}`.endsWith(".") ? zone.zone : `${zone.zone}.`;
+
     for (const zr of response.zone_record) {
-      console.log(zr);
       const row = document.createElement("tr");
       try {
         const owner =
-          zr.owner === `${zone.zone}.`
+          zr.owner === zoneFqdn
             ? zr.owner
-            : zr.owner.endsWith(`${zone.zone}.`)
+            : zr.owner.endsWith(zoneFqdn)
               ? zr.owner
-              : `${zr.owner}.${zone.zone}.`;
-        // console.log('owner', owner);
+              : `${zr.owner}.${zoneFqdn}`;
         const rrCtor = RR[zr.type];
         const asRR = new rrCtor({ ...zr, owner, type: rrCtor.name });
-        // console.log('asRR', asRR)
         row.asRR = asRR;
         zr.rdata = asRR
           .getRdataFields()
-          .map((f) => asRR.get(f))
+          .map((f) => {
+            if (zr.type === "AAAA" && f === "address") return asRR.getCompressed();
+            return asRR.get(f);
+          })
           .join(" ");
       } catch (error) {
         console.error("Error creating RR:", error);
       }
       row.id = `zr_${zr.id}_tr`;
 
-      const ownerDisplay = escapeHtml(zr.owner);
+      const ownerDisplay = escapeHtml(zr.owner === zoneFqdn ? "@" : zr.owner);
       const typeDisplay = escapeHtml(zr.type);
       const ttlDisplay = escapeHtml(formatZoneRecordTtl(zr.ttl));
       const rdataInfo = getRdataPreview(zr.rdata);
@@ -831,6 +1241,7 @@ function showZoneRecords(zone) {
                     >🗑</button>`;
 
       row.innerHTML = `
+                <td style="display:none">2</td>
                 <td class="small" id="zr_${zr.id}_td">${ownerDisplay}</td>
                 <td class="small">${typeDisplay}</td>
                 <td class="small">${ttlDisplay}</td>
@@ -911,13 +1322,18 @@ function showZoneRecords(zone) {
     const hasTableControls = response.zone_record.length >= 10;
 
     const dt = new DataTable(table, {
-      order: [[0, "asc"]],
+      order: [[0, "asc"], [1, "asc"]],
+      orderFixed: { pre: [[0, "asc"]] },
       pageLength: 10,
       lengthMenu: [10, 25, 50],
       searching: hasTableControls,
       paging: hasTableControls,
       info: hasTableControls,
       lengthChange: hasTableControls,
+      columnDefs: [
+        { visible: false, orderable: false, searchable: false, targets: [0] },
+        { orderable: false, searchable: false, targets: [5] },
+      ],
       language: {
         lengthMenu: "_MENU_ resource records per page",
         info: "Showing _START_ to _END_ of _TOTAL_ resource records",
@@ -929,6 +1345,98 @@ function showZoneRecords(zone) {
   });
 }
 
+function openCreateZoneModal() {
+  const textFields = ["zoneCreateZone", "zoneCreateDescription", "zoneCreateMailaddr"];
+  for (const id of textFields) {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  }
+
+  const timeFields = ["Ttl", "Minimum", "Refresh", "Retry", "Expire"];
+  const defaultKeys = { Ttl: "ttl", Minimum: "minimum", Refresh: "refresh", Retry: "retry", Expire: "expire" };
+  for (const f of timeFields) {
+    const el = document.getElementById(`zoneCreate${f}`);
+    if (el) {
+      el.value = String(zoneDefaults[defaultKeys[f]] ?? "");
+      const disp = document.getElementById(`zoneCreate${f}Display`);
+      if (disp) disp.textContent = secondsToHuman(el.value);
+    }
+    attachTimeField(`zoneCreate${f}`, `zoneCreate${f}Display`);
+  }
+
+  const zoneInput = document.getElementById("zoneCreateZone");
+  const mailaddrInput = document.getElementById("zoneCreateMailaddr");
+  if (zoneInput && mailaddrInput && !zoneInput.dataset.blurInitialized) {
+    zoneInput.dataset.blurInitialized = "true";
+    zoneInput.addEventListener("blur", () => {
+      if (mailaddrInput.value.trim() !== "") return;
+      const z = zoneInput.value.trim().replace(/\.$/, "");
+      if (z) mailaddrInput.value = `hostmaster.${z}`;
+    });
+  }
+
+  initZoneCreateActions();
+
+  const modalEl = document.getElementById("zoneCreateModal");
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
+function initZoneCreateActions() {
+  const saveButton = document.getElementById("zoneCreateSaveButton");
+  if (!saveButton || saveButton.dataset.initialized === "true") return;
+  saveButton.dataset.initialized = "true";
+
+  saveButton.addEventListener("click", async () => {
+    const zone = document.getElementById("zoneCreateZone").value.trim();
+    if (!zone) { alert("Zone name is required."); return; }
+    if (!currentGroupId) { alert("No active group. Please log in again."); return; }
+
+    const now = new Date();
+    const serial = parseInt(
+      `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}01`,
+      10,
+    );
+
+    const parseTime = (id, fallback) => {
+      const raw = document.getElementById(id)?.value ?? "";
+      return parseHumanTime(raw) ?? fallback;
+    };
+
+    const payload = {
+      zone,
+      gid: currentGroupId,
+      serial,
+      ttl:     parseTime("zoneCreateTtl",     zoneDefaults.ttl),
+      minimum: parseTime("zoneCreateMinimum", zoneDefaults.minimum),
+      refresh: parseTime("zoneCreateRefresh", zoneDefaults.refresh),
+      retry:   parseTime("zoneCreateRetry",   zoneDefaults.retry),
+      expire:  parseTime("zoneCreateExpire",  zoneDefaults.expire),
+    };
+
+    const description = document.getElementById("zoneCreateDescription").value.trim();
+    if (description) payload.description = description;
+    const mailaddr = document.getElementById("zoneCreateMailaddr").value.trim();
+    if (mailaddr) payload.mailaddr = mailaddr;
+
+    saveButton.disabled = true;
+    try {
+      const response = await ajax({ method: "POST", url: `${API_URI}/zone`, payload });
+      if (!response || response?.error) {
+        console.error("Create zone failed:", response, payload);
+        alert(response?.message ?? "Create failed. See console for details.");
+        return;
+      }
+      bootstrap.Modal.getOrCreateInstance(document.getElementById("zoneCreateModal")).hide();
+      zoneDataTable.ajax.reload(null, false);
+    } catch (error) {
+      console.error("Create zone request failed:", error);
+      alert("Create failed due to a network or server error.");
+    } finally {
+      saveButton.disabled = false;
+    }
+  });
+}
+
 let activeZoneContext = null;
 
 function openEditZoneModal(zone) {
@@ -937,11 +1445,21 @@ function openEditZoneModal(zone) {
   document.getElementById("zoneEditName").value        = zone.zone ?? "";
   document.getElementById("zoneEditDescription").value = zone.description ?? "";
   document.getElementById("zoneEditMailaddr").value    = zone.mailaddr ?? "";
-  document.getElementById("zoneEditTtl").value         = zone.ttl ?? "";
-  document.getElementById("zoneEditMinimum").value     = zone.minimum ?? "";
-  document.getElementById("zoneEditRefresh").value     = zone.refresh ?? "";
-  document.getElementById("zoneEditRetry").value       = zone.retry ?? "";
-  document.getElementById("zoneEditExpire").value      = zone.expire ?? "";
+
+  const timeFields = [
+    ["zoneEditTtl",     zone.ttl,     "zoneEditTtlDisplay"],
+    ["zoneEditMinimum", zone.minimum, "zoneEditMinimumDisplay"],
+    ["zoneEditRefresh", zone.refresh, "zoneEditRefreshDisplay"],
+    ["zoneEditRetry",   zone.retry,   "zoneEditRetryDisplay"],
+    ["zoneEditExpire",  zone.expire,  "zoneEditExpireDisplay"],
+  ];
+  for (const [inputId, val, displayId] of timeFields) {
+    const el = document.getElementById(inputId);
+    if (el) el.value = val != null ? String(val) : "";
+    const disp = document.getElementById(displayId);
+    if (disp) disp.textContent = val != null ? secondsToHuman(val) : "";
+    attachTimeField(inputId, displayId);
+  }
 
   initZoneModalActions();
 
@@ -961,19 +1479,22 @@ function initZoneModalActions() {
     const payload = {};
     const description = document.getElementById("zoneEditDescription").value;
     const mailaddr    = document.getElementById("zoneEditMailaddr").value;
-    const ttl         = document.getElementById("zoneEditTtl").value;
-    const minimum     = document.getElementById("zoneEditMinimum").value;
-    const refresh     = document.getElementById("zoneEditRefresh").value;
-    const retry       = document.getElementById("zoneEditRetry").value;
-    const expire      = document.getElementById("zoneEditExpire").value;
 
     payload.description = description;
     payload.mailaddr    = mailaddr;
-    if (ttl     !== "") payload.ttl     = Number(ttl);
-    if (minimum !== "") payload.minimum = Number(minimum);
-    if (refresh !== "") payload.refresh = Number(refresh);
-    if (retry   !== "") payload.retry   = Number(retry);
-    if (expire  !== "") payload.expire  = Number(expire);
+
+    for (const [key, inputId] of [
+      ["ttl",     "zoneEditTtl"],
+      ["minimum", "zoneEditMinimum"],
+      ["refresh", "zoneEditRefresh"],
+      ["retry",   "zoneEditRetry"],
+      ["expire",  "zoneEditExpire"],
+    ]) {
+      const raw = document.getElementById(inputId)?.value ?? "";
+      if (raw.trim() === "") continue;
+      const parsed = parseHumanTime(raw);
+      if (parsed !== null) payload[key] = parsed;
+    }
 
     saveButton.disabled = true;
     try {
@@ -1064,7 +1585,7 @@ function initZoneRecordModalActions() {
     if (ttl !== undefined) payload.ttl = ttl;
 
     for (const field of rr.getRdataFields()) {
-      const input = document.getElementById(`zrEdit${field}`);
+      const input = document.getElementById(`zrEdit${fieldToId(field)}`);
       if (!input) continue;
       payload[field] = parseInputValue(`${input.value ?? ""}`);
     }
@@ -1112,6 +1633,7 @@ function populateZrEditType() {
 
   for (const rr in RR) {
     if (["default", "typeMap"].includes(rr)) continue;
+    if (rr === "SOA") continue; // SOA is defined by the zone itself
     const instance = new RR[rr](null);
     const option = document.createElement("option");
     option.value = rr;
@@ -1130,14 +1652,14 @@ function populateZrEditType() {
 }
 
 function getRdataInput(field, value = "", rr) {
-  // console.log('getRdataInput', field)
+  const eid = `zrEdit${fieldToId(field)}`;
 
-  let input = `<input type="text" class="form-control" id="zrEdit${field}" value="${value}" placeholder=" ">`;
+  let input = `<input type="text" class="form-control" id="${eid}" value="${escapeHtml(`${value ?? ""}`)}" placeholder=" ">`;
 
   if (rr[`get${rr.ucFirst(field)}Options`]) {
-    input = `<select class="form-select" id="zrEdit${field}">`;
+    input = `<select class="form-select" id="${eid}">`;
     for (const o of rr[`get${rr.ucFirst(field)}Options`]({ desc: true })) {
-      input += `<option value="${o[0]}" ${value === o[0] ? "selected" : ""}>${o[0]}${o[1] ? ` - ${o[1]}` : ""}</option>`;
+      input += `<option value="${escapeHtml(`${o[0]}`)}" ${value === o[0] ? "selected" : ""}>${escapeHtml(`${o[0]}`)}${o[1] ? ` - ${escapeHtml(`${o[1]}`)}` : ""}</option>`;
     }
     input += `</select>`;
   } else if (rr.get("type") === "NAPTR" && field === "flags") {
@@ -1156,14 +1678,14 @@ function getRdataInput(field, value = "", rr) {
       case "protocol":
       case "service":
       case "weight":
-        input = `<input type="number" class="form-control" id="zrEdit${field}" value="${value}" placeholder=" ">`;
+        input = `<input type="number" class="form-control" id="${eid}" value="${escapeHtml(`${value ?? ""}`)}" placeholder=" ">`;
         break;
     }
   }
 
   return `
     <div class="form-floating mb-3">${input}
-        <label for="zrEdit${field}" class="form-label text-capitalize" style="">${field}</label>
+        <label for="${eid}" class="form-label text-capitalize" style="">${escapeHtml(field)}</label>
         <div id="zrEdit${rr.ucFirst(field)}Help" class="form-text"></div>
     </div>`;
 }
@@ -1214,7 +1736,8 @@ function populateZrEditRdata(rr, zr) {
   }
 
   for (const f of rr.getRdataFields()) {
-    const t = document.getElementById(`zrEdit${f}`);
+    const t = document.getElementById(`zrEdit${fieldToId(f)}`);
+    if (!t) continue;
 
     t.addEventListener("change", (event) => {
       changeRDataField(f, rr, event);

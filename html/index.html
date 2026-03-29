@@ -86,7 +86,7 @@
           </li>
         </ul>
 
-        <ul class="navbar-nav">
+        <ul class="navbar-nav gap-3">
           <li class="navbar-item dropdown">
             <a
               id="group_dropdown_label"
@@ -123,10 +123,9 @@
                       id="dangerousModeToggle"
                     />
                     <label class="form-check-label small" for="dangerousModeToggle"
-                      >Running with scissors</label
+                      >Confirm deletes</label
                     >
                   </div>
-                  <div class="small text-body-secondary">Skip delete confirmation</div>
                 </div>
               </li>
               <li><hr class="dropdown-divider" /></li>
@@ -155,6 +154,7 @@
           id="login_form"
           action=""
           onsubmit="return false;"
+          autocomplete="off"
           class="align-items-center"
           style="padding: 6em"
         >
@@ -211,16 +211,16 @@
               <tbody id="zone_tbody"></tbody>
             </table>
 
-            <div class="form-check form-switch mt-3 text-body-secondary small">
-              <input
-                class="form-check-input"
-                type="checkbox"
-                role="switch"
-                id="zoneSearchDeleted"
-              />
-              <label class="form-check-label" for="zoneSearchDeleted"
-                >Search deleted zones</label
-              >
+            <div class="d-flex gap-3 mt-3 text-body-secondary small flex-wrap">
+              <div class="form-check form-switch">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  role="switch"
+                  id="zoneSearchDeleted"
+                />
+                <label class="form-check-label" for="zoneSearchDeleted">Show deleted</label>
+              </div>
             </div>
           </div>
 
@@ -241,6 +241,17 @@
               </thead>
               <tbody></tbody>
             </table>
+            <div class="d-flex gap-3 mt-3 text-body-secondary small flex-wrap">
+              <div class="form-check form-switch">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  role="switch"
+                  id="nsShowDeleted"
+                />
+                <label class="form-check-label" for="nsShowDeleted">Show deleted</label>
+              </div>
+            </div>
           </div>
 
           <div id="users_div" class="tab-pane fade" role="tabpanel" aria-labelledby="tab-users">
@@ -259,10 +270,103 @@
               </thead>
               <tbody></tbody>
             </table>
+            <div class="d-flex gap-3 mt-3 text-body-secondary small flex-wrap">
+              <div class="form-check form-switch">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  role="switch"
+                  id="userShowDeleted"
+                />
+                <label class="form-check-label" for="userShowDeleted">Show deleted</label>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </main>
+
+    <div
+      class="modal fade"
+      id="zoneCreateModal"
+      tabindex="-1"
+      aria-labelledby="zoneCreateModalLabel"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h1 class="modal-title fs-5" id="zoneCreateModalLabel">Create Zone</h1>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="container-fluid">
+              <div class="mb-3 row">
+                <div class="form-floating col-md-12">
+                  <input type="text" class="form-control form-control-sm" id="zoneCreateZone" placeholder="example.com." />
+                  <label for="zoneCreateZone" class="form-label ms-2">Zone name</label>
+                </div>
+              </div>
+              <div class="mb-3 row">
+                <div class="form-floating col-md-12">
+                  <input type="text" class="form-control form-control-sm" id="zoneCreateDescription" placeholder="Description" />
+                  <label for="zoneCreateDescription" class="form-label ms-2">Description</label>
+                </div>
+              </div>
+              <div class="mb-3 row">
+                <div class="form-floating col-md-12">
+                  <input type="text" class="form-control form-control-sm" id="zoneCreateMailaddr" placeholder="hostmaster" />
+                  <label for="zoneCreateMailaddr" class="form-label ms-2">Hostmaster (mailaddr)</label>
+                </div>
+              </div>
+              <div class="mb-3 row">
+                <div class="col-md-6">
+                  <div class="form-floating">
+                    <input type="text" class="form-control form-control-sm" id="zoneCreateTtl" placeholder="86400" />
+                    <label for="zoneCreateTtl" class="form-label ms-2">Default TTL</label>
+                  </div>
+                  <small class="form-text text-muted" id="zoneCreateTtlDisplay"></small>
+                </div>
+                <div class="col-md-6">
+                  <div class="form-floating">
+                    <input type="text" class="form-control form-control-sm" id="zoneCreateMinimum" placeholder="2560" />
+                    <label for="zoneCreateMinimum" class="form-label ms-2">Minimum (negative TTL)</label>
+                  </div>
+                  <small class="form-text text-muted" id="zoneCreateMinimumDisplay"></small>
+                </div>
+              </div>
+              <div class="mb-3 row">
+                <div class="col-md-4">
+                  <div class="form-floating">
+                    <input type="text" class="form-control form-control-sm" id="zoneCreateRefresh" placeholder="16384" />
+                    <label for="zoneCreateRefresh" class="form-label ms-2">Refresh</label>
+                  </div>
+                  <small class="form-text text-muted" id="zoneCreateRefreshDisplay"></small>
+                </div>
+                <div class="col-md-4">
+                  <div class="form-floating">
+                    <input type="text" class="form-control form-control-sm" id="zoneCreateRetry" placeholder="900" />
+                    <label for="zoneCreateRetry" class="form-label ms-2">Retry</label>
+                  </div>
+                  <small class="form-text text-muted" id="zoneCreateRetryDisplay"></small>
+                </div>
+                <div class="col-md-4">
+                  <div class="form-floating">
+                    <input type="text" class="form-control form-control-sm" id="zoneCreateExpire" placeholder="1048576" />
+                    <label for="zoneCreateExpire" class="form-label ms-2">Expire</label>
+                  </div>
+                  <small class="form-text text-muted" id="zoneCreateExpireDisplay"></small>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button id="zoneCreateSaveButton" type="button" class="btn btn-primary">Create</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div
       class="modal fade"
@@ -298,27 +402,42 @@
                 </div>
               </div>
               <div class="mb-3 row">
-                <div class="form-floating col-md-6">
-                  <input type="number" min="0" max="2147483647" step="3600" class="form-control form-control-sm" id="zoneEditTtl" placeholder="3600" />
-                  <label for="zoneEditTtl" class="form-label ms-2">Default TTL</label>
+                <div class="col-md-6">
+                  <div class="form-floating">
+                    <input type="text" class="form-control form-control-sm" id="zoneEditTtl" placeholder="86400" />
+                    <label for="zoneEditTtl" class="form-label ms-2">Default TTL</label>
+                  </div>
+                  <small class="form-text text-muted" id="zoneEditTtlDisplay"></small>
                 </div>
-                <div class="form-floating col-md-6">
-                  <input type="number" min="0" max="2147483647" step="3600" class="form-control form-control-sm" id="zoneEditMinimum" placeholder="3600" />
-                  <label for="zoneEditMinimum" class="form-label ms-2">Minimum (negative TTL)</label>
+                <div class="col-md-6">
+                  <div class="form-floating">
+                    <input type="text" class="form-control form-control-sm" id="zoneEditMinimum" placeholder="2560" />
+                    <label for="zoneEditMinimum" class="form-label ms-2">Minimum (negative TTL)</label>
+                  </div>
+                  <small class="form-text text-muted" id="zoneEditMinimumDisplay"></small>
                 </div>
               </div>
               <div class="mb-3 row">
-                <div class="form-floating col-md-4">
-                  <input type="number" min="0" max="2147483647" step="3600" class="form-control form-control-sm" id="zoneEditRefresh" placeholder="86400" />
-                  <label for="zoneEditRefresh" class="form-label ms-2">Refresh</label>
+                <div class="col-md-4">
+                  <div class="form-floating">
+                    <input type="text" class="form-control form-control-sm" id="zoneEditRefresh" placeholder="16384" />
+                    <label for="zoneEditRefresh" class="form-label ms-2">Refresh</label>
+                  </div>
+                  <small class="form-text text-muted" id="zoneEditRefreshDisplay"></small>
                 </div>
-                <div class="form-floating col-md-4">
-                  <input type="number" min="0" max="2147483647" step="3600" class="form-control form-control-sm" id="zoneEditRetry" placeholder="7200" />
-                  <label for="zoneEditRetry" class="form-label ms-2">Retry</label>
+                <div class="col-md-4">
+                  <div class="form-floating">
+                    <input type="text" class="form-control form-control-sm" id="zoneEditRetry" placeholder="900" />
+                    <label for="zoneEditRetry" class="form-label ms-2">Retry</label>
+                  </div>
+                  <small class="form-text text-muted" id="zoneEditRetryDisplay"></small>
                 </div>
-                <div class="form-floating col-md-4">
-                  <input type="number" min="0" max="2147483647" step="86400" class="form-control form-control-sm" id="zoneEditExpire" placeholder="1209600" />
-                  <label for="zoneEditExpire" class="form-label ms-2">Expire</label>
+                <div class="col-md-4">
+                  <div class="form-floating">
+                    <input type="text" class="form-control form-control-sm" id="zoneEditExpire" placeholder="1048576" />
+                    <label for="zoneEditExpire" class="form-label ms-2">Expire</label>
+                  </div>
+                  <small class="form-text text-muted" id="zoneEditExpireDisplay"></small>
                 </div>
               </div>
             </div>
@@ -434,5 +553,101 @@
     </footer>
 
     <script></script>
+
+    <!-- User create/edit pane -->
+    <div
+      class="offcanvas offcanvas-end"
+      tabindex="-1"
+      id="userEditPane"
+      aria-labelledby="userEditPaneLabel"
+      style="width: 380px;"
+    >
+      <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title" id="userEditPaneLabel">User</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+      </div>
+      <div class="offcanvas-body">
+        <div class="form-floating mb-3">
+          <input type="text" class="form-control" id="userEditUsername" placeholder="jsmith" />
+          <label for="userEditUsername">Username</label>
+        </div>
+        <div class="form-floating mb-3">
+          <input type="text" class="form-control" id="userEditFirstName" placeholder="Jane" />
+          <label for="userEditFirstName">First Name</label>
+        </div>
+        <div class="form-floating mb-3">
+          <input type="text" class="form-control" id="userEditLastName" placeholder="Smith" />
+          <label for="userEditLastName">Last Name</label>
+        </div>
+        <div class="form-floating mb-3">
+          <input type="email" class="form-control" id="userEditEmail" placeholder="jane@example.com" />
+          <label for="userEditEmail">Email</label>
+        </div>
+        <div class="form-floating mb-3">
+          <input type="password" class="form-control" id="userEditPassword" placeholder="Password" autocomplete="new-password" />
+          <label for="userEditPassword">Password</label>
+        </div>
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" role="switch" id="userEditIsAdmin" />
+          <label class="form-check-label" for="userEditIsAdmin">Administrator</label>
+        </div>
+        <div class="d-flex justify-content-end gap-2 mt-4">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="offcanvas">Cancel</button>
+          <button type="button" class="btn btn-primary" id="userEditSaveBtn">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nameserver create/edit pane -->
+    <div
+      class="offcanvas offcanvas-end"
+      tabindex="-1"
+      id="nsEditPane"
+      aria-labelledby="nsEditPaneLabel"
+      style="width: 380px;"
+    >
+      <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title" id="nsEditPaneLabel">Nameserver</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+      </div>
+      <div class="offcanvas-body">
+        <div class="form-floating mb-3">
+          <input type="text" class="form-control" id="nsEditName" placeholder="ns1.example.com" />
+          <label for="nsEditName">Name</label>
+        </div>
+        <div class="form-floating mb-3">
+          <input type="text" class="form-control" id="nsEditDescription" placeholder="Description" />
+          <label for="nsEditDescription">Description</label>
+        </div>
+        <div class="form-floating mb-3">
+          <input type="number" class="form-control" id="nsEditTtl" placeholder="86400" min="0" />
+          <label for="nsEditTtl">TTL (seconds)</label>
+        </div>
+        <div class="form-floating mb-3">
+          <input type="text" class="form-control" id="nsEditAddress" placeholder="192.0.2.1" />
+          <label for="nsEditAddress">IPv4 Address</label>
+        </div>
+        <div class="form-floating mb-3">
+          <input type="text" class="form-control" id="nsEditAddress6" placeholder="2001:db8::1" />
+          <label for="nsEditAddress6">IPv6 Address</label>
+        </div>
+        <div class="form-floating mb-3">
+          <select class="form-select" id="nsEditExportType">
+            <option value="bind">bind</option>
+            <option value="nsd">nsd</option>
+            <option value="knot">knot</option>
+            <option value="djbdns">djbdns</option>
+            <option value="maradns">maradns</option>
+            <option value="powerdns">powerdns</option>
+          </select>
+          <label for="nsEditExportType">Export Format</label>
+        </div>
+        <div class="d-flex justify-content-end gap-2 mt-4">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="offcanvas">Cancel</button>
+          <button type="button" class="btn btn-primary" id="nsEditSaveBtn">Save</button>
+        </div>
+      </div>
+    </div>
+
   </body>
 </html>

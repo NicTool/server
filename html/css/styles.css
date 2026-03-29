@@ -50,6 +50,21 @@
   font-size: 0.9rem;
 }
 
+/* Reduce zone record row heights by ~1/3 vs Bootstrap default */
+#zone_table .zone-records-table td {
+  padding-top: 0.2rem;
+  padding-bottom: 0.2rem;
+}
+
+/* Synthetic SOA/NS rows — near-minimum row height */
+#zone_table .zone-records-table tr.zone-record-soa td,
+#zone_table .zone-records-table tr.zone-record-synthetic td {
+  font-size: 0.7rem;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  line-height: 1.15;
+}
+
 #zone_table .zone-records-table > thead > tr > th {
   background-color: transparent !important;
   color: var(--bs-secondary-color);
@@ -94,4 +109,75 @@
   padding: 0.1rem 0.35rem !important;
 }
 
-/*# sourceMappingURL=styles.css.map */
+/* Zone table — soften outer border */
+#zone_table_wrapper table.dataTable {
+  border-color: var(--bs-border-color-translucent);
+}
+
+/* Expanded zone records panel — left/right breathing room */
+#zone_table .zone-records-panel {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+/* Nameserver table compact styling (matches zone records table) */
+#ns_table td {
+  font-size: 0.9rem;
+  padding-top: 0.2rem;
+  padding-bottom: 0.2rem;
+}
+
+#ns_table > thead > tr > th {
+  background-color: transparent !important;
+  color: var(--bs-secondary-color);
+}
+
+/* Subdue NS and Users DataTable length/info/paging controls */
+#ns_table_wrapper .dt-length,
+#ns_table_wrapper .dt-info,
+#ns_table_wrapper .dt-paging,
+#user_table_wrapper .dt-length,
+#user_table_wrapper .dt-info,
+#user_table_wrapper .dt-paging {
+  font-size: 0.8rem;
+  color: var(--bs-secondary-color);
+  opacity: 0.5;
+}
+
+#ns_table_wrapper .dt-length select,
+#user_table_wrapper .dt-length select {
+  min-width: 4.25rem;
+  font-size: 0.8rem;
+  padding-top: 0.15rem;
+  padding-bottom: 0.15rem;
+  color: var(--bs-secondary-color);
+  border-color: var(--bs-border-color-translucent);
+  background-color: transparent;
+}
+
+#ns_table_wrapper .dt-paging-button,
+#user_table_wrapper .dt-paging-button {
+  font-size: 0.8rem;
+  padding: 0.1rem 0.35rem !important;
+}
+
+/* Group dropdown hover submenu (springs to the left) */
+#group_dropdown_menu li.has-submenu {
+  position: relative;
+}
+
+#group_dropdown_menu li.has-submenu .group-submenu {
+  display: none;
+  position: absolute;
+  right: 100%;
+  top: 0;
+  min-width: 180px;
+  z-index: 1001;
+  margin: 0;
+  padding: 0.5rem 0;
+  list-style: none;
+}
+
+#group_dropdown_menu li.has-submenu:hover .group-submenu {
+  display: block;
+}
