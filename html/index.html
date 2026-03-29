@@ -100,6 +100,10 @@
             <ul id="group_dropdown_menu" class="dropdown-menu"></ul>
           </li>
 
+          <li class="navbar-item">
+            <a class="nav-link" href="/configure.html" title="Server configuration">&#9881;</a>
+          </li>
+
           <li class="navbar-item dropdown">
             <a
               class="nav-link dropdown-toggle"
@@ -109,9 +113,8 @@
               aria-expanded="false"
               >Profile</a
             >
-            <ul class="dropdown-menu">
-              <li><a class="dropdown-item" href="#">Password</a></li>
-              <li><a class="dropdown-item" href="#">Profile</a></li>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="#" id="profileMenuItem">Profile</a></li>
               <li><hr class="dropdown-divider" /></li>
               <li>
                 <div class="px-3 py-2">
@@ -153,7 +156,6 @@
         <form
           id="login_form"
           action=""
-          onsubmit="return false;"
           autocomplete="off"
           class="align-items-center"
           style="padding: 6em"
@@ -264,7 +266,6 @@
                   <th style="text-align: left">Username</th>
                   <th style="text-align: left">Name</th>
                   <th style="text-align: left">Email</th>
-                  <th style="text-align: center">Admin</th>
                   <th style="text-align: center">Actions</th>
                 </tr>
               </thead>
@@ -391,12 +392,6 @@
               </div>
               <div class="mb-3 row">
                 <div class="form-floating col-md-12">
-                  <input type="text" class="form-control form-control-sm" id="zoneEditDescription" placeholder="Description" />
-                  <label for="zoneEditDescription" class="form-label ms-2">Description</label>
-                </div>
-              </div>
-              <div class="mb-3 row">
-                <div class="form-floating col-md-12">
                   <input type="text" class="form-control form-control-sm" id="zoneEditMailaddr" placeholder="hostmaster" />
                   <label for="zoneEditMailaddr" class="form-label ms-2">Hostmaster (mailaddr)</label>
                 </div>
@@ -442,9 +437,15 @@
               </div>
             </div>
           </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button id="zoneEditSaveButton" type="button" class="btn btn-primary">Save</button>
+          <div class="modal-footer" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+            <div class="form-floating w-100">
+              <input type="text" class="form-control form-control-sm" id="zoneEditDescription" placeholder="Description" />
+              <label for="zoneEditDescription" class="form-label ms-2">Description</label>
+            </div>
+            <div class="d-flex justify-content-end gap-2 w-100">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button id="zoneEditSaveButton" type="button" class="btn btn-primary">Save</button>
+            </div>
           </div>
         </div>
       </div>
@@ -522,6 +523,12 @@
                 <div id="zrEditTtlHelp" class="form-text">Blank inherits zone TTL.</div>
               </div>
               <div id="zrEditRdata" class="mb-3 col-md-12 mt-auto"></div>
+              <div class="mb-3 row">
+                <div class="form-floating col-md-12">
+                  <input type="text" class="form-control form-control-sm" id="zrEditDescription" placeholder="Optional note" />
+                  <label for="zrEditDescription" class="form-label ms-2">Description</label>
+                </div>
+              </div>
             </div>
           </div>
           <div class="modal-footer">
@@ -583,9 +590,17 @@
           <input type="email" class="form-control" id="userEditEmail" placeholder="jane@example.com" />
           <label for="userEditEmail">Email</label>
         </div>
-        <div class="form-floating mb-3">
+        <div class="form-floating mb-2">
           <input type="password" class="form-control" id="userEditPassword" placeholder="Password" autocomplete="new-password" />
-          <label for="userEditPassword">Password</label>
+          <label for="userEditPassword">Password <span class="small text-body-secondary">(leave blank to keep current)</span></label>
+        </div>
+        <div id="userPasswordHints" class="d-none mb-3 small ps-1">
+          <div id="pwHintLength"   data-msg="At least 8 characters"                 class="text-danger">✗ At least 8 characters</div>
+          <div id="pwHintUpper"    data-msg="2 uppercase letters"                   class="text-danger">✗ 2 uppercase letters</div>
+          <div id="pwHintLower"    data-msg="2 lowercase letters"                   class="text-danger">✗ 2 lowercase letters</div>
+          <div id="pwHintNumber"   data-msg="2 numbers"                             class="text-danger">✗ 2 numbers</div>
+          <div id="pwHintSpecial"  data-msg="2 special characters"                  class="text-danger">✗ 2 special characters</div>
+          <div id="pwHintBanned"   data-msg="Does not contain: abc, 123, asdf, password" class="text-danger">✗ Does not contain: abc, 123, asdf, password</div>
         </div>
         <div class="form-check form-switch mb-3">
           <input class="form-check-input" type="checkbox" role="switch" id="userEditIsAdmin" />
@@ -616,10 +631,6 @@
           <label for="nsEditName">Name</label>
         </div>
         <div class="form-floating mb-3">
-          <input type="text" class="form-control" id="nsEditDescription" placeholder="Description" />
-          <label for="nsEditDescription">Description</label>
-        </div>
-        <div class="form-floating mb-3">
           <input type="number" class="form-control" id="nsEditTtl" placeholder="86400" min="0" />
           <label for="nsEditTtl">TTL (seconds)</label>
         </div>
@@ -641,6 +652,10 @@
             <option value="powerdns">powerdns</option>
           </select>
           <label for="nsEditExportType">Export Format</label>
+        </div>
+        <div class="form-floating mb-3">
+          <input type="text" class="form-control" id="nsEditDescription" placeholder="Description" />
+          <label for="nsEditDescription">Description</label>
         </div>
         <div class="d-flex justify-content-end gap-2 mt-4">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="offcanvas">Cancel</button>

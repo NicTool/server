@@ -132,59 +132,6 @@
       margin: 0.75rem 0 0.25rem;
     }
 
-    /* ---- local-service toggle ---- */
-    .toggle-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-top: 0.75rem;
-      padding-top: 0.75rem;
-      border-top: 1px solid #eaeef2;
-    }
-
-    .toggle-wrap {
-      position: relative;
-      width: 36px;
-      height: 20px;
-      flex-shrink: 0;
-    }
-
-    .toggle-wrap input { opacity: 0; width: 0; height: 0; position: absolute; }
-
-    .toggle-track {
-      position: absolute;
-      inset: 0;
-      background: #d0d7de;
-      border-radius: 10px;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .toggle-wrap input:checked ~ .toggle-track { background: #1a7f37; }
-
-    .toggle-track::after {
-      content: '';
-      position: absolute;
-      width: 14px;
-      height: 14px;
-      background: #fff;
-      border-radius: 50%;
-      top: 3px;
-      left: 3px;
-      transition: left 0.2s;
-    }
-
-    .toggle-wrap input:checked ~ .toggle-track::after { left: 19px; }
-
-    .toggle-label {
-      font-size: 0.8rem;
-      color: #57606a;
-      cursor: pointer;
-      text-transform: none;
-      letter-spacing: 0;
-      font-weight: 400;
-    }
-
     /* ---- nameserver table ---- */
     .ns-grid {
       width: 100%;
@@ -343,23 +290,28 @@
       </div>
       <div class="card-body">
         <div class="fields">
-          <div class="field wide">
-            <label for="api-host">Host</label>
-            <input type="text" id="api-host" name="api.host" placeholder="localhost" autocomplete="off">
-            <span class="field-note" id="n-api-host"></span>
-          </div>
           <div class="field narrow">
-            <label for="api-port">Port</label>
-            <input type="number" id="api-port" name="api.port" min="1" max="65535">
-            <span class="field-note" id="n-api-port"></span>
+            <label for="api-mode">Mode</label>
+            <select id="api-mode" name="api.mode">
+              <option value="local">local</option>
+              <option value="remote">remote</option>
+            </select>
+            <span class="field-note">How the API is reached</span>
           </div>
         </div>
-        <div class="toggle-row" id="api-local-row" style="display:none">
-          <label class="toggle-wrap">
-            <input type="checkbox" id="api-run-local" checked>
-            <span class="toggle-track"></span>
-          </label>
-          <label class="toggle-label" for="api-run-local">Run API service on this machine</label>
+        <div id="api-remote-fields" style="display:none; margin-top:0.75rem">
+          <div class="fields">
+            <div class="field wide">
+              <label for="api-host">Host</label>
+              <input type="text" id="api-host" name="api.host" placeholder="api.example.com" autocomplete="off">
+              <span class="field-note" id="n-api-host"></span>
+            </div>
+            <div class="field narrow">
+              <label for="api-port">Port</label>
+              <input type="number" id="api-port" name="api.port" min="1" max="65535">
+              <span class="field-note" id="n-api-port"></span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -400,7 +352,7 @@
   'use strict'
 
   let _rowSeq = 0
-  let _serverHostname = null   // os.hostname() of the machine running the configurator
+  let _serverHostname = ''
 
   // -------------------------------------------------------------------------
   // Validation helpers
@@ -550,7 +502,7 @@
 
     _pathCheckTimer = setTimeout(async () => {
       try {
-        const res = await fetch('/api/check-path?path=' + encodeURIComponent(val))
+        const res = await fetch('/nt/check-path?path=' + encodeURIComponent(val))
         const data = await res.json()
         _pathCheckOk = data.ok
         const msg = data.ok
@@ -569,23 +521,21 @@
     }, 400)
   }
 
-  function isLocalHost(v) {
-    return v === 'localhost' || v === _serverHostname
-  }
-
-  function updateApiToggle() {
-    const host = document.getElementById('api-host').value.trim()
-    document.getElementById('api-local-row').style.display = isLocalHost(host) ? '' : 'none'
-  }
-
   function validateAPI() {
+    const mode = document.getElementById('api-mode').value
+    const isRemote = mode === 'remote'
+    document.getElementById('api-remote-fields').style.display = isRemote ? '' : 'none'
+
+    if (!isRemote) {
+      setBadge('b-api', true, false)
+      return true
+    }
+
     const hostOk = isValidHost(document.getElementById('api-host').value)
     const portOk = isValidPort(document.getElementById('api-port').value)
 
     setField('api-host', 'n-api-host', hostOk, hostOk ? '' : 'Required')
     setField('api-port', 'n-api-port', portOk, portOk ? '' : '1 – 65535')
-
-    updateApiToggle()
 
     const ok = hostOk && portOk
     setBadge('b-api', ok, false)
@@ -751,13 +701,12 @@
       store.dsn      = dsnFromFields()
     }
 
-    const apiLocalEl = document.getElementById('api-run-local')
-    const startVal = apiLocalEl.offsetParent !== null ? apiLocalEl.checked : undefined
-    const api = {
-      host: document.getElementById('api-host').value.trim(),
-      port: Number(document.getElementById('api-port').value),
-    }
-    if (startVal !== undefined) api.start = startVal
+    const mode = document.getElementById('api-mode').value
+    const api = { mode }
+    const apiHost = document.getElementById('api-host').value.trim()
+    const apiPort = Number(document.getElementById('api-port').value)
+    if (apiHost) api.host = apiHost
+    if (apiPort) api.port = apiPort
     const config = {
       store,
       api,
@@ -791,7 +740,10 @@
     if (c.store) {
       document.getElementById('store-type').value = c.store.type || 'directory'
       // Always populate all fields so switching types doesn't lose saved values
-      if (c.store.path) document.getElementById('store-path').value = c.store.path
+      if (c.store.path) {
+        document.getElementById('store-path').value = c.store.path
+        checkStorePath()  // trigger async path validation so Save is enabled for valid paths
+      }
       if (c.store.host || c.store.dsn) {
         if (c.store.host) {
           document.getElementById('db-host').value     = c.store.host
@@ -807,13 +759,16 @@
       }
     }
     if (c.api) {
-      document.getElementById('api-host').value = c.api.host || ''
-      document.getElementById('api-port').value = c.api.port || ''
-      if (c.api.start !== undefined) {
-        document.getElementById('api-run-local').checked = c.api.start
-      }
+      document.getElementById('api-mode').value = c.api.mode || 'local'
+      if (c.api.host) document.getElementById('api-host').value = c.api.host
+      if (c.api.port) document.getElementById('api-port').value = c.api.port
+    } else if (c._suggested?.api) {
+      // Pre-fill the suggested port on first configuration (useful if user switches to remote mode)
+      document.getElementById('api-port').value = c._suggested.api
     }
 
+    // Clear any existing NS rows before re-populating
+    document.getElementById('ns-body').innerHTML = ''
     const nameservers = Array.isArray(c.nameserver) && c.nameserver.length ? c.nameserver : null
     if (nameservers) for (const ns of nameservers) addNsRow(ns)
   }
@@ -833,7 +788,7 @@
     msg.className = ''
 
     try {
-      const res = await fetch('/api/config', {
+      const res = await fetch('/nt/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(collectConfig()),
@@ -857,7 +812,7 @@
   // Wire up static field listeners
   // -------------------------------------------------------------------------
 
-  for (const id of ['store-type', 'api-host', 'api-port']) {
+  for (const id of ['store-type', 'api-mode', 'api-host', 'api-port']) {
     const el = document.getElementById(id)
     if (el) el.addEventListener('input', validateAll)
     if (el) el.addEventListener('change', validateAll)
@@ -886,53 +841,20 @@
 
   document.getElementById('btn-add-ns').addEventListener('click', () => addNsRow())
 
-  // API service toggle — fires immediately to start/stop the process
-  document.getElementById('api-run-local').addEventListener('change', async function () {
-    const want = this.checked
-    this.disabled = true
-    try {
-      const res = await fetch('/api/service/api', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ running: want }),
-      })
-      const data = await res.json()
-      this.checked = data.api?.running ?? want
-    } catch {
-      this.checked = !want
-    } finally {
-      this.disabled = false
-    }
-  })
-
   // -------------------------------------------------------------------------
   // Boot: fetch config from server then populate
   // -------------------------------------------------------------------------
 
-  Promise.all([
-    fetch('/api/config').then((r) => r.json()),
-    fetch('/api/service').then((r) => r.json()).catch(() => null),
-  ]).then(([data, svc]) => {
+  fetch('/nt/config').then((r) => r.json()).then((data) => {
     if (data?._hostname) _serverHostname = data._hostname
 
-    const suggested = data?._suggested
-    const hasConfig = !!(data?.store || data?.api)
-    if (hasConfig) {
-      populateForm(data)
-    } else {
-      if (suggested?.api) document.getElementById('api-port').value = suggested.api
-      addNsRow()
-    }
+    populateForm(data)
 
-    const toggle = document.getElementById('api-run-local')
-    if (data?.api?.start !== undefined) {
-      toggle.checked = data.api.start
-    } else if (svc?.api != null) {
-      toggle.checked = svc.api.running
-    }
+    // If no nameservers were populated (fresh install), add an empty starter row
+    if (document.getElementById('ns-body').children.length === 0) addNsRow()
 
     validateAll()
-  }).catch(() => { addNsRow(); validateAll() })
+  }).catch((err) => { console.error('Config fetch failed:', err); addNsRow(); validateAll() })
 </script>
 </body>
 </html>

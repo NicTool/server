@@ -1,3 +1,4 @@
+import http from 'node:http'
 import https from 'node:https'
 import path from 'node:path'
 import fs from 'node:fs/promises'
@@ -30,11 +31,10 @@ const MIME = {
  * @param {string} opts.host         Hostname the server is bound to.
  * @param {number} opts.port         Port to listen on (443 or 8443).
  * @param {object} [opts.nicConfig]  Parsed nictool.toml contents, or null.
- * @param {object} [opts.apiProcess] Initial child process handle for the API.
+ * @param {object} [opts.apiServer]  Initialized (but not listening) Hapi server for in-process API.
  * @param {object} [opts.suggestedPorts] Random port suggestions { api, client }.
- * @param {Function} [opts.startAPI]  Async fn(config) → ChildProcess that starts the API.
- * @param {Function} [opts.onSaved]   Called with (config, {apiProcess}) after a
- *                                    successful save, once the response has flushed.
+ * @param {Function} [opts.onSaved]  Called with (config, ctx) after a successful save, once the
+ *                                   response has flushed. May set ctx.apiServer.
  * @returns {Promise<https.Server>}
  */
 export async function startServer({
@@ -43,14 +43,14 @@ export async function startServer({
   host,
   port,
   nicConfig = null,
-  apiProcess = null,
+  apiServer = null,
+  apiRemoteUrl = null,
   suggestedPorts = null,
-  startAPI = null,
   onSaved = null,
 }) {
   const tomlPath = path.join(configDir, 'etc', 'nictool.toml')
   // ctx is mutated as services start/stop
-  const ctx = { configDir, tomlPath, nicConfig, apiProcess, suggestedPorts, host, startAPI, onSaved }
+  const ctx = { configDir, tomlPath, nicConfig, apiServer, apiRemoteUrl, suggestedPorts, host, onSaved }
 
   const server = https.createServer({ cert: tls.cert, key: tls.key }, (req, res) =>
     handleRequest(req, res, ctx),
@@ -79,17 +79,22 @@ async function handleRequest(req, res, ctx) {
       const page = ctx.nicConfig?.configured ? 'html/index.html' : 'html/configure.html'
       return await serveFile(res, page)
     }
-    if (url === '/api/config' && method === 'GET') return serveConfig(res, ctx)
-    if (url === '/api/config' && method === 'POST') return await saveConfig(req, res, ctx)
-    if (url?.startsWith('/api/check-path') && method === 'GET') return await checkPath(req, res, ctx)
-    if (url === '/api/service' && method === 'GET') return serveService(res, ctx)
-    if (url === '/api/service/api' && method === 'POST') return await toggleService(req, res, ctx)
-    if (url === '/api/status' && method === 'GET') return await serveStatus(res, ctx)
+
+    if (url === '/nt/config' && method === 'GET') return serveConfig(res, ctx)
+    if (url === '/nt/config' && method === 'POST') return await saveConfig(req, res, ctx)
+    if (url?.startsWith('/nt/check-path') && method === 'GET') return await checkPath(req, res, ctx)
+    if (url === '/nt/service' && method === 'GET') return serveService(res, ctx)
+    if (url === '/nt/status' && method === 'GET') return await serveStatus(res, ctx)
+
+    if (url?.startsWith('/api/') || url?.startsWith('/doc')) {
+      if (ctx.apiServer) return await forwardToAPI(req, res, ctx.apiServer)
+      if (ctx.apiRemoteUrl) return forwardToRemote(req, res, ctx.apiRemoteUrl)
+    }
 
     if (method === 'GET' && url?.startsWith('/nictool/')) return await serveStatic(req, res, path.join(__dirname, 'node_modules', '@nictool'), '/nictool/')
     if (method === 'GET') return await serveStatic(req, res, path.join(__dirname, 'html'), '/')
 
-    respond(res, 404, 'application/json', JSON.stringify({ error: 'Not Found' }))
+    respond(res, 404, 'application/json', JSON.stringify({ error: `Not Found ${url}` }))
   } catch (err) {
     console.error(err)
     respond(res, 500, 'application/json', JSON.stringify({ error: 'Internal Server Error' }))
@@ -121,7 +126,7 @@ async function serveStatic(req, res, rootDir, urlPrefix) {
     res.end(content)
   } catch (err) {
     if (err.code === 'ENOENT') {
-      respond(res, 404, 'application/json', JSON.stringify({ error: 'Not Found' }))
+      respond(res, 404, 'application/json', JSON.stringify({ error: `Not Found: static ${urlPath}` }))
     } else {
       throw err
     }
@@ -136,48 +141,9 @@ function serveConfig(res, { nicConfig, suggestedPorts, host }) {
   }
 }
 
-function serveService(res, { apiProcess }) {
-  const api = apiProcess
-    ? { running: apiProcess.exitCode === null && !apiProcess.killed, pid: apiProcess.pid }
-    : { running: false }
+function serveService(res, { apiServer }) {
+  const api = { running: apiServer != null }
   respond(res, 200, 'application/json', JSON.stringify({ api }, null, 2))
-}
-
-async function toggleService(req, res, ctx) {
-  let body
-  try {
-    body = JSON.parse(await readBody(req))
-  } catch {
-    return respond(res, 400, 'application/json', JSON.stringify({ error: 'Invalid JSON' }))
-  }
-
-  const want = !!body.running
-  const isRunning = ctx.apiProcess && ctx.apiProcess.exitCode === null && !ctx.apiProcess.killed
-
-  if (want && !isRunning) {
-    if (!ctx.startAPI || !ctx.nicConfig) {
-      return respond(res, 400, 'application/json', JSON.stringify({ error: 'No config to start API with' }))
-    }
-    ctx.apiProcess = await ctx.startAPI(ctx.nicConfig)
-    console.log(`API started (pid ${ctx.apiProcess?.pid})`)
-  } else if (!want && isRunning) {
-    ctx.apiProcess.kill()
-    ctx.apiProcess = null
-    console.log('API stopped')
-  }
-
-  // Persist the start preference to nictool.toml
-  if (ctx.nicConfig) {
-    if (!ctx.nicConfig.api) ctx.nicConfig.api = {}
-    ctx.nicConfig.api.start = want
-    try {
-      await fs.writeFile(ctx.tomlPath, stringify(ctx.nicConfig))
-    } catch (err) {
-      console.warn(`Could not persist start state: ${err.message}`)
-    }
-  }
-
-  serveService(res, ctx)
 }
 
 async function checkPath(req, res, { configDir }) {
@@ -212,11 +178,9 @@ async function checkPath(req, res, { configDir }) {
   }
 }
 
-async function serveStatus(res, { tomlPath, nicConfig, apiProcess }) {
+async function serveStatus(res, { tomlPath, nicConfig, apiServer }) {
   const configured = await fileExists(tomlPath)
-  const api = apiProcess
-    ? { running: apiProcess.exitCode === null && !apiProcess.killed, pid: apiProcess.pid }
-    : null
+  const api = { running: apiServer != null }
   respond(
     res,
     200,
@@ -236,8 +200,11 @@ async function saveConfig(req, res, ctx) {
   // Strip runtime-only flags from the toml payload
   const { startApi: _startApi, _hostname: _h, _suggested: _s, ...config } = body
 
-  if (!config.store?.type || !config.api?.host || !(config.api?.port > 0)) {
+  if (!config.store?.type) {
     return respond(res, 400, 'application/json', JSON.stringify({ error: 'Missing required fields' }))
+  }
+  if (config.api?.mode === 'remote' && (!config.api?.host || !(config.api?.port > 0))) {
+    return respond(res, 400, 'application/json', JSON.stringify({ error: 'Remote API mode requires host and port' }))
   }
 
   // Mark configuration as complete — this is the flag that skips the configurator on next run
@@ -247,11 +214,86 @@ async function saveConfig(req, res, ctx) {
     await fs.mkdir(path.dirname(ctx.tomlPath), { recursive: true })
     await fs.writeFile(ctx.tomlPath, stringify(config))
     ctx.nicConfig = config
-    res.on('finish', () => ctx.onSaved?.(config, { apiProcess: ctx.apiProcess }))
+    res.on('finish', () => ctx.onSaved?.(config, ctx))
     respond(res, 200, 'application/json', JSON.stringify({ ok: true }))
   } catch (err) {
     respond(res, 500, 'application/json', JSON.stringify({ error: err.message }))
   }
+}
+
+// ---------------------------------------------------------------------------
+// API forwarding — dispatches /api/* requests to the in-process Hapi server
+// ---------------------------------------------------------------------------
+
+async function forwardToAPI(req, res, hapiServer) {
+  const apiPath = req.url.slice(4) || '/'  // strip '/api' prefix
+
+  const forwardHeaders = {}
+  for (const hdr of ['authorization', 'content-type', 'accept']) {
+    if (req.headers[hdr]) forwardHeaders[hdr] = req.headers[hdr]
+  }
+
+  let payload
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    const body = await readBody(req)
+    if (body) payload = body
+  }
+
+  const result = await hapiServer.inject({
+    method: req.method,
+    url: apiPath,
+    headers: forwardHeaders,
+    payload,
+    remoteAddress: req.socket?.remoteAddress ?? '127.0.0.1',
+  })
+
+  res.writeHead(result.statusCode, {
+    'Content-Type': result.headers['content-type'] ?? 'application/json',
+  })
+  res.end(result.rawPayload)
+}
+
+/**
+ * Proxy /api/* to a remote API server at remoteBaseUrl.
+ * Streams the request body directly without buffering.
+ * Uses rejectUnauthorized:false so self-signed certs on internal services work.
+ */
+function forwardToRemote(req, res, remoteBaseUrl) {
+  const apiPath = req.url.slice(4) || '/'
+  const target = new URL(apiPath, remoteBaseUrl)
+  const mod = target.protocol === 'https:' ? https : http
+
+  const forwardHeaders = {}
+  for (const hdr of ['authorization', 'content-type', 'accept', 'content-length']) {
+    if (req.headers[hdr]) forwardHeaders[hdr] = req.headers[hdr]
+  }
+
+  return new Promise((resolve, reject) => {
+    const upReq = mod.request(
+      {
+        hostname: target.hostname,
+        port: target.port || (target.protocol === 'https:' ? 443 : 80),
+        path: target.pathname + target.search,
+        method: req.method,
+        headers: forwardHeaders,
+        rejectUnauthorized: false,
+      },
+      (upRes) => {
+        const chunks = []
+        upRes.on('data', (c) => chunks.push(c))
+        upRes.on('end', () => {
+          res.writeHead(upRes.statusCode, {
+            'Content-Type': upRes.headers['content-type'] ?? 'application/json',
+          })
+          res.end(Buffer.concat(chunks))
+          resolve()
+        })
+        upRes.on('error', reject)
+      },
+    )
+    upReq.on('error', reject)
+    req.pipe(upReq)
+  })
 }
 
 // ---------------------------------------------------------------------------

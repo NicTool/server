@@ -1,14 +1,15 @@
 import * as RR from "/nictool/dns-resource-record/index.js";
 
-const API_URI = "https://mattbook-m3.home.simerson.net:3000";
+const API_URI = "/api";
 let nsDataTable;
 let zoneDataTable;
 let userDataTable;
 const zoneRecordDataTables = new Map();
 const zoneColumnSearchTimers = new Map();
-const RR_DATA_PREVIEW_CHARS = 72;
+const RR_DATA_PREVIEW_CHARS = 50;
 const CONFIRM_DELETES_COOKIE = "nt-confirm-deletes";
 let activeZoneRecordContext;
+let currentUser = null;
 
 function isConfirmDeletesEnabled() {
   // Default ON (confirm) when no cookie set; cookie "0" means skip confirms
@@ -366,7 +367,7 @@ async function loadGroupMenu(gid, name) {
         }
         li.appendChild(submenu);
       } else {
-        li.innerHTML = `<a class="dropdown-item" href="#" data-group-id="${g.id}" data-group-name="${escapeHtml(g.name)}">${escapeHtml(g.name)}</a>`;
+        li.innerHTML = `<a class="dropdown-item" href="#" data-group-id="${g.id}" data-group-name="${escapeHtml(g.name)}"><span class="invisible me-2">▸</span>${escapeHtml(g.name)}</a>`;
       }
       groupMenu.appendChild(li);
     }
@@ -394,6 +395,7 @@ function onLoggedIn(response) {
   document.getElementById("loggedInMain").style.display = "block";
   document.getElementById("loggedInMain").classList.add("show");
 
+  currentUser = response.user ?? null;
   currentGroupId = response.group?.id ?? null;
   rootGroupId = currentGroupId;
   groupHistory = [];
@@ -418,6 +420,7 @@ function onLoggedIn(response) {
           loadGroupMenu(prev.id, prev.name);
           if (zoneDataTable) zoneDataTable.ajax.reload(null, true); else showZones();
           showNameservers();
+          showUsers();
           return;
         }
 
@@ -442,7 +445,7 @@ function onLoggedIn(response) {
     if (currentGroupId) loadGroupMenu(currentGroupId, response.group?.name ?? "Group");
   }
 
-  fetch("/api/config")
+  fetch("/nt/config")
     .then((r) => r.json())
     .then((cfg) => {
       if (cfg?.zone) zoneDefaults = { ...zoneDefaults, ...cfg.zone };
@@ -479,16 +482,17 @@ function initZoneControls() {
 }
 
 function attemptLogin() {
+  const username = document.getElementById("username").value.trim();
+  const password = document.getElementById("password").value;
+  if (!username || !password) return;
+
   console.log("attempting login");
 
   try {
     ajax({
       method: "POST",
       url: `${API_URI}/session`,
-      payload: {
-        username: document.getElementById("username").value,
-        password: document.getElementById("password").value,
-      },
+      payload: { username, password },
     }).then((response) => {
       console.log("login response", response);
       if (response.session) {
@@ -557,34 +561,78 @@ function showNameservers() {
       row.classList.add("accordion-item");
       row.id = `ns_${ns.id}_tr`;
       if (ns.deleted) row.classList.add("text-body-secondary");
+
+      let nameCell = escapeHtml(ns.name ?? "");
+      try {
+        // Validate the name is parseable — flag rows with missing trailing dot or other issues
+        if (ns.name && !ns.name.endsWith(".")) {
+          nameCell = `${nameCell} <span class="badge text-bg-warning ms-1" title="Name is missing a trailing dot">!</span>`;
+        }
+      } catch (e) {
+        nameCell = `${nameCell} <span class="badge text-bg-danger ms-1" title="${escapeHtml(e.message)}">invalid</span>`;
+      }
+
+      const actionButtons = ns.deleted
+        ? `<button type="button" class="btn btn-sm btn-link text-success p-0 ns-restore-btn" style="text-decoration:none;font-size:0.85rem;line-height:1;" aria-label="Restore nameserver" title="Restore nameserver">↩ Restore</button>`
+        : `<div class="d-inline-flex align-items-center gap-2"><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 ns-edit-btn" style="text-decoration:none;font-size:0.9rem;line-height:1;" aria-label="Edit nameserver">✎</button><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 ns-delete-btn" style="text-decoration:none;font-size:0.9rem;line-height:1;" aria-label="Delete nameserver" title="Delete nameserver">🗑</button></div>`;
+
       row.innerHTML = `
-        <td>${escapeHtml(ns.name ?? "")}</td>
+        <td>${nameCell}</td>
         <td>${escapeHtml(ns.description ?? "")}</td>
         <td style="text-align: right;">${escapeHtml(ns.address ?? "")}</td>
         <td style="text-align: right;">${escapeHtml(ns.address6 ?? "")}</td>
         <td style="text-align: center">${escapeHtml(ns.export?.type ?? "")}</td>
-        <td style="text-align: center"><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 ns-edit-btn" style="text-decoration:none;font-size:0.9rem;line-height:1;" aria-label="Edit nameserver">✎</button></td>
+        <td style="text-align: center">${actionButtons}</td>
       `;
-      row.querySelector(".ns-edit-btn").addEventListener("click", () => openNsPane(ns));
+
+      row.querySelector(".ns-edit-btn")?.addEventListener("click", () => openNsPane(ns));
+      row.querySelector(".ns-delete-btn")?.addEventListener("click", () => {
+        if (isConfirmDeletesEnabled()) {
+          const confirmed = window.confirm(`Delete nameserver ${ns.name}?`);
+          if (!confirmed) return;
+        }
+        ajax({ method: "DELETE", url: `${API_URI}/nameserver/${ns.id}` }).then((r) => {
+          if (r?.error) { console.error("Delete NS failed:", r); return; }
+          showNameservers();
+        });
+      });
+      row.querySelector(".ns-restore-btn")?.addEventListener("click", () => {
+        ajax({ method: "PUT", url: `${API_URI}/nameserver/${ns.id}`, payload: { deleted: false } }).then((r) => {
+          if (r?.error) { console.error("Restore NS failed:", r); return; }
+          showNameservers();
+        });
+      });
+
       body.appendChild(row);
     }
 
-    const filterRow = tableHead.rows[0].cloneNode(true);
-    filterRow.classList.add("ns-filter-row");
-    for (let i = 0; i < filterRow.cells.length; i++) {
-      const cell = filterRow.cells[i];
-      if (i === filterRow.cells.length - 1) {
-        cell.innerHTML = "";
-        continue;
+    const nsPageLength = 25;
+    const hasSearch = sorted.length >= nsPageLength;
+    let filterRow;
+    if (hasSearch) {
+      filterRow = tableHead.rows[0].cloneNode(true);
+      filterRow.classList.add("ns-filter-row");
+      for (let i = 0; i < filterRow.cells.length; i++) {
+        const cell = filterRow.cells[i];
+        if (i === filterRow.cells.length - 1) {
+          cell.innerHTML = "";
+          continue;
+        }
+        const title = tableHead.rows[0].cells[i].textContent.trim();
+        cell.innerHTML = `<input type="search" class="form-control form-control-sm" placeholder="Search ${title}" aria-label="Search ${title}">`;
       }
-      const title = tableHead.rows[0].cells[i].textContent.trim();
-      cell.innerHTML = `<input type="search" class="form-control form-control-sm" placeholder="Search ${title}" aria-label="Search ${title}">`;
+      tableHead.appendChild(filterRow);
     }
-    tableHead.appendChild(filterRow);
+
+    const createBtn = document.createElement("button");
+    createBtn.type = "button";
+    createBtn.className = "btn btn-sm btn-outline-secondary";
+    createBtn.textContent = "+ Create";
+    createBtn.addEventListener("click", () => openNsPane(null));
 
     nsDataTable = new DataTable(table, {
       orderCellsTop: true,
-      pageLength: 25,
+      pageLength: nsPageLength,
       lengthMenu: [10, 25, 50, 100],
       layout: { topEnd: null },
       columnDefs: [
@@ -592,20 +640,26 @@ function showNameservers() {
       ],
       initComplete() {
         const api = this.api();
-        api.columns().every(function (index) {
-          const input = filterRow.cells[index].querySelector("input");
-          if (!input) return;
-          input.addEventListener("input", () => {
-            if (this.search() !== input.value) this.search(input.value).draw();
+        if (hasSearch && filterRow) {
+          api.columns().every(function (index) {
+            const input = filterRow.cells[index].querySelector("input");
+            if (!input) return;
+            input.addEventListener("input", () => {
+              if (this.search() !== input.value) this.search(input.value).draw();
+            });
           });
-        });
-        const actionsCell = filterRow.cells[filterRow.cells.length - 1];
-        const createBtn = document.createElement("button");
-        createBtn.type = "button";
-        createBtn.className = "btn btn-sm btn-outline-secondary";
-        createBtn.textContent = "+ Create";
-        createBtn.addEventListener("click", () => openNsPane(null));
-        actionsCell.appendChild(createBtn);
+        }
+        // Place Create button in the top-right of the DataTable toolbar row
+        const container = api.table().container();
+        const topRow = container.querySelectorAll(".dt-layout-row")[0];
+        if (topRow) {
+          topRow.style.display = "flex";
+          topRow.style.alignItems = "center";
+          const btnCell = document.createElement("div");
+          btnCell.style.marginLeft = "auto";
+          btnCell.appendChild(createBtn);
+          topRow.appendChild(btnCell);
+        }
       },
     });
   });
@@ -715,10 +769,19 @@ function showUsers() {
         <td>${escapeHtml(u.username ?? "")}</td>
         <td>${escapeHtml((u.first_name ?? "") + (u.last_name ? " " + u.last_name : ""))}</td>
         <td>${escapeHtml(u.email ?? "")}</td>
-        <td style="text-align: center">${u.is_admin ? "✓" : ""}</td>
-        <td style="text-align: center"><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 user-edit-btn" style="text-decoration:none;font-size:0.9rem;line-height:1;" aria-label="Edit user">✎</button></td>
+        <td style="text-align: center; white-space: nowrap"><div class="d-inline-flex align-items-center gap-2"><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 user-edit-btn" style="text-decoration:none;font-size:0.9rem;line-height:1;" aria-label="Edit user">✎</button><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 user-delete-btn" style="text-decoration:none;font-size:0.9rem;line-height:1;" aria-label="Delete user" title="Delete user">🗑</button></div></td>
       `;
       row.querySelector(".user-edit-btn").addEventListener("click", () => openUserPane(u));
+      row.querySelector(".user-delete-btn").addEventListener("click", () => {
+        if (isConfirmDeletesEnabled()) {
+          const confirmed = window.confirm(`Delete user ${u.username}?`);
+          if (!confirmed) return;
+        }
+        ajax({ method: "DELETE", url: `${API_URI}/user/${u.id}` }).then((response) => {
+          if (response?.error) { console.error("Delete user failed:", response); return; }
+          showUsers();
+        });
+      });
       body.appendChild(row);
     }
 
@@ -738,7 +801,7 @@ function showUsers() {
       lengthMenu: [10, 25, 50, 100],
       layout: { topEnd: null },
       columnDefs: [
-        { orderable: false, searchable: false, targets: [4] },
+        { orderable: false, searchable: false, targets: [3] },
       ],
       initComplete() {
         const api = this.api();
@@ -782,6 +845,30 @@ function initUserControls() {
   if (deletedToggle && !deletedToggle.dataset.initialized) {
     deletedToggle.dataset.initialized = "true";
     deletedToggle.addEventListener("change", () => showUsers());
+  }
+
+  const pwField = document.getElementById("userEditPassword");
+  const hintsEl = document.getElementById("userPasswordHints");
+  if (pwField && hintsEl && !pwField.dataset.hintsInitialized) {
+    pwField.dataset.hintsInitialized = "true";
+    const checkHint = (id, ok) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.className = ok ? "text-success" : "text-danger";
+      el.textContent = `${ok ? "✓" : "✗"} ${el.dataset.msg}`;
+    };
+    pwField.addEventListener("input", () => {
+      const v = pwField.value;
+      if (!v) { hintsEl.classList.add("d-none"); return; }
+      hintsEl.classList.remove("d-none");
+      checkHint("pwHintLength",  v.length >= 8);
+      checkHint("pwHintUpper",   (v.match(/[A-Z]/g) ?? []).length >= 2);
+      checkHint("pwHintLower",   (v.match(/[a-z]/g) ?? []).length >= 2);
+      checkHint("pwHintNumber",  (v.match(/[0-9]/g) ?? []).length >= 2);
+      checkHint("pwHintSpecial", (v.match(/[^a-zA-Z0-9]/g) ?? []).length >= 2);
+      const vl = v.toLowerCase();
+      checkHint("pwHintBanned",  !["password","abc","123","asdf"].some(s => vl.includes(s)));
+    });
   }
 
   const saveBtn = document.getElementById("userEditSaveBtn");
@@ -881,8 +968,12 @@ function showZones() {
       {
         data: null,
         className: "text-center",
-        defaultContent:
-          '<div class="d-inline-flex align-items-center gap-2"><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 zone-add-zr-btn" aria-label="Add resource record" title="Add resource record" style="text-decoration: none; font-size: 1rem; line-height: 1;">+</button><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 zone-edit-btn" aria-label="Edit zone" title="Edit zone" style="text-decoration: none; font-size: 0.9rem; line-height: 1;">✎</button><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 zone-delete-btn" aria-label="Delete zone" title="Delete zone" style="text-decoration: none; font-size: 0.9rem; line-height: 1;">🗑</button></div>',
+        render(rowData) {
+          if (rowData?.deleted) {
+            return `<div class="d-inline-flex"><button type="button" class="btn btn-sm btn-link text-success p-0 zone-restore-btn" aria-label="Restore zone" title="Restore zone" style="text-decoration:none;font-size:0.9rem;line-height:1;">↩ Restore</button></div>`;
+          }
+          return `<div class="d-inline-flex align-items-center gap-2"><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 zone-add-zr-btn" aria-label="Add resource record" title="Add resource record" style="text-decoration: none; font-size: 1rem; line-height: 1;">+</button><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 zone-edit-btn" aria-label="Edit zone" title="Edit zone" style="text-decoration: none; font-size: 0.9rem; line-height: 1;">✎</button><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 zone-delete-btn" aria-label="Delete zone" title="Delete zone" style="text-decoration: none; font-size: 0.9rem; line-height: 1;">🗑</button></div>`;
+        },
       },
     ],
     async ajax(data, callback) {
@@ -1017,6 +1108,29 @@ function showZones() {
       return;
     }
 
+    const zoneRestoreButton = event.target.closest("button.zone-restore-btn");
+    if (zoneRestoreButton) {
+      const tr = zoneRestoreButton.closest("tr");
+      if (!tr) return;
+
+      const row = zoneDataTable.row(tr);
+      const zone = row.data();
+      if (!zone) return;
+
+      ajax({
+        method: "PUT",
+        url: `${API_URI}/zone/${zone.id}`,
+        payload: { deleted: false },
+      }).then((response) => {
+        if (response?.error) {
+          console.error("Restore zone failed:", response);
+          return;
+        }
+        zoneDataTable.ajax.reload(null, false);
+      });
+      return;
+    }
+
     const deleteButton = event.target.closest("button.zone-delete-btn");
     if (deleteButton) {
       const tr = deleteButton.closest("tr");
@@ -1084,8 +1198,8 @@ function showZones() {
                                 <th style="display:none"></th>
                                 <th>Name</th>
                                 <th>Type</th>
-                                <th>TTL</th>
                                 <th>Data</th>
+                                <th>TTL</th>
                   <th style="text-align: center; width: 4rem;">Actions</th>
                             </tr>
                         </thead>
@@ -1135,10 +1249,10 @@ function buildSyntheticSoaRow(zone) {
     <td style="display:none">0</td>
     <td class="small text-muted">@</td>
     <td class="small text-muted">SOA</td>
-    <td class="small text-muted">${escapeHtml(formatZoneRecordTtl(zone.ttl))}</td>
     <td class="small text-muted" style="width: 50%;">
       <span class="text-truncate" style="display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(rdata)}">${escapeHtml(rdata)}</span>
     </td>
+    <td class="small text-muted">${escapeHtml(formatZoneRecordTtl(zone.ttl))}</td>
     <td class="small text-center"></td>
   `;
   return row;
@@ -1154,10 +1268,10 @@ function buildSyntheticNsRow(zr, zone) {
     <td style="display:none">1</td>
     <td class="small text-muted">${ownerDisplay}</td>
     <td class="small text-muted">NS</td>
-    <td class="small text-muted">${escapeHtml(formatZoneRecordTtl(zr.ttl))}</td>
     <td class="small text-muted" style="width: 50%;">
       <span class="text-truncate" style="display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${rdata}">${rdata}</span>
     </td>
+    <td class="small text-muted">${escapeHtml(formatZoneRecordTtl(zr.ttl))}</td>
     <td class="small text-center"></td>
   `;
   return row;
@@ -1166,6 +1280,10 @@ function buildSyntheticNsRow(zr, zone) {
 function showZoneRecords(zone) {
   const zrTable = zoneRecordDataTables.get(zone.id);
   if (zrTable) {
+    // Remove the custom info element inserted before the dt-container
+    const container = zrTable.table().container();
+    const prev = container?.previousElementSibling;
+    if (prev?.classList.contains("text-body-secondary")) prev.remove();
     zrTable.destroy();
     zoneRecordDataTables.delete(zone.id);
   }
@@ -1188,6 +1306,22 @@ function showZoneRecords(zone) {
     }
 
     // console.log('GET /zone_record response', response);
+
+    const hasDescriptions = response.zone_record.some((zr) => zr.description);
+    if (hasDescriptions) {
+      const thead = table.querySelector("thead tr");
+      if (thead) {
+        const actionsTh = thead.lastElementChild;
+        const descTh = document.createElement("th");
+        descTh.textContent = "Description";
+        thead.insertBefore(descTh, actionsTh);
+      }
+      for (const row of tbody.rows) {
+        const emptyTd = document.createElement("td");
+        emptyTd.className = "small text-muted";
+        row.insertBefore(emptyTd, row.lastElementChild);
+      }
+    }
 
     const zoneFqdn = `${zone.zone}`.endsWith(".") ? zone.zone : `${zone.zone}.`;
 
@@ -1230,8 +1364,16 @@ function showZoneRecords(zone) {
                       class="btn btn-sm btn-outline-secondary zr-copy-btn"
                       aria-label="Copy record data"
                       title="Copy full value"
+                      style="padding-top:0.09rem;padding-bottom:0.09rem;"
                     >Copy</button>`
         : "";
+      const editButtonHtml = `<button
+                      type="button"
+                      class="btn btn-sm btn-link text-body-secondary p-0 zr-edit-btn"
+                      aria-label="Edit zone record"
+                      title="Edit zone record"
+                      style="text-decoration: none; font-size: 0.9rem; line-height: 1;"
+                    >✎</button>`;
       const deleteButtonHtml = `<button
                       type="button"
                       class="btn btn-sm btn-link text-body-secondary p-0 zr-delete-btn"
@@ -1240,22 +1382,28 @@ function showZoneRecords(zone) {
                       style="text-decoration: none; font-size: 0.95rem; line-height: 1;"
                     >🗑</button>`;
 
+      const dataCellAttrs = rdataInfo.isTrimmed
+        ? 'class="small" style="width:50%;font-size:0.75em;"'
+        : 'class="small" style="width:50%;"';
+      const dataSpanAttrs = rdataInfo.isTrimmed
+        ? `title="${rdataFull}"`
+        : `class="text-truncate" style="display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${rdataFull}"`;
+      const dataWrapperAttrs = rdataInfo.isTrimmed
+        ? 'class="d-flex flex-wrap align-items-center gap-2"'
+        : 'class="d-flex align-items-center gap-2" style="min-width:0;"';
       row.innerHTML = `
                 <td style="display:none">2</td>
                 <td class="small" id="zr_${zr.id}_td">${ownerDisplay}</td>
                 <td class="small">${typeDisplay}</td>
-                <td class="small">${ttlDisplay}</td>
-                <td class="small" style="width: 50%;">
-                  <div class="d-flex align-items-center gap-2" style="min-width: 0;">
-                    <span
-                      class="text-truncate"
-                      style="display: inline-block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
-                      title="${rdataFull}"
-                    >${rdataDisplay}</span>${trimmedMarker}
+                <td ${dataCellAttrs}>
+                  <div ${dataWrapperAttrs}>
+                    <span ${dataSpanAttrs}>${rdataDisplay}</span>${trimmedMarker}
                     ${copyButtonHtml}
                   </div>
                 </td>
-                <td class="small text-center">${deleteButtonHtml}</td>
+                <td class="small">${ttlDisplay}</td>
+                ${hasDescriptions ? `<td class="small text-muted">${escapeHtml(zr.description ?? "")}</td>` : ""}
+                <td class="small text-center"><div class="d-inline-flex align-items-center gap-1">${editButtonHtml}${deleteButtonHtml}</div></td>
             `;
       tbody.appendChild(row);
 
@@ -1273,6 +1421,20 @@ function showZoneRecords(zone) {
           setTimeout(() => {
             copyButton.textContent = original;
           }, 1200);
+        });
+      }
+
+      const editButton = row.querySelector(".zr-edit-btn");
+      if (editButton) {
+        editButton.addEventListener("click", (event) => {
+          event.stopPropagation();
+          event.preventDefault();
+          activeZoneRecordContext = { zone, zr, mode: "edit" };
+          setZoneRecordModalMode("edit");
+          editZoneRecord(zone, zr, row.asRR);
+          const modalEl = document.getElementById("zrEditModal");
+          const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+          modal.show();
         });
       }
 
@@ -1308,7 +1470,7 @@ function showZoneRecords(zone) {
       document
         .getElementById(`zr_${zr.id}_tr`)
         .addEventListener("click", (event) => {
-          if (event.target.closest(".zr-copy-btn, .zr-delete-btn")) return;
+          if (event.target.closest(".zr-copy-btn, .zr-delete-btn, .zr-edit-btn")) return;
 
           activeZoneRecordContext = { zone, zr, mode: "edit" };
           setZoneRecordModalMode("edit");
@@ -1319,29 +1481,75 @@ function showZoneRecords(zone) {
         });
     }
 
-    const hasTableControls = response.zone_record.length >= 10;
+    const hasTableControls = response.zone_record.length > 10;
 
-    const dt = new DataTable(table, {
+    // Build merged info/length control element
+    const infoEl = document.createElement("div");
+    infoEl.className = "small text-body-secondary py-1";
+
+    let pageLenSelect = null;
+    if (hasTableControls) {
+      pageLenSelect = document.createElement("select");
+      pageLenSelect.className = "form-select form-select-sm d-inline-block";
+      pageLenSelect.style.cssText = "width:auto;padding:0.1rem 1.5rem 0.1rem 0.4rem;font-size:inherit;vertical-align:baseline;";
+      for (const n of [10, 25, 50]) {
+        const opt = document.createElement("option");
+        opt.value = n;
+        opt.textContent = n;
+        if (n === 10) opt.selected = true;
+        pageLenSelect.appendChild(opt);
+      }
+    }
+
+    let zrDt;
+    const updateInfoEl = (api) => {
+      const dtApi = api ?? zrDt;
+      if (!dtApi) return;
+      const pg = dtApi.page.info();
+      infoEl.innerHTML = "";
+      if (hasTableControls) {
+        infoEl.appendChild(document.createTextNode(`Showing ${pg.start + 1} to `));
+        infoEl.appendChild(pageLenSelect);
+        infoEl.appendChild(document.createTextNode(` of ${pg.recordsDisplay} resource records`));
+      } else {
+        infoEl.textContent = `Showing ${pg.start + 1} to ${pg.end} of ${pg.recordsDisplay} resource records`;
+      }
+    };
+
+    if (pageLenSelect) {
+      pageLenSelect.addEventListener("change", () => {
+        zrDt?.page.len(+pageLenSelect.value).draw();
+      });
+    }
+
+    zrDt = new DataTable(table, {
       order: [[0, "asc"], [1, "asc"]],
       orderFixed: { pre: [[0, "asc"]] },
       pageLength: 10,
-      lengthMenu: [10, 25, 50],
-      searching: hasTableControls,
+      searching: false,
       paging: hasTableControls,
-      info: hasTableControls,
-      lengthChange: hasTableControls,
+      info: false,
+      lengthChange: false,
+      layout: {
+        topStart: null,
+        topEnd: null,
+        bottomStart: null,
+      },
       columnDefs: [
         { visible: false, orderable: false, searchable: false, targets: [0] },
-        { orderable: false, searchable: false, targets: [5] },
+        { orderable: false, searchable: false, targets: [-1] },
       ],
-      language: {
-        lengthMenu: "_MENU_ resource records per page",
-        info: "Showing _START_ to _END_ of _TOTAL_ resource records",
-        infoEmpty: "Showing 0 resource records",
-        infoFiltered: "(filtered from _MAX_ resource records)",
+      initComplete() {
+        const api = this.api();
+        const container = api.table().container();
+        container.parentElement.insertBefore(infoEl, container);
+        updateInfoEl(api);
+      },
+      drawCallback() {
+        updateInfoEl();
       },
     });
-    zoneRecordDataTables.set(zone.id, dt);
+    zoneRecordDataTables.set(zone.id, zrDt);
   });
 }
 
@@ -1563,8 +1771,6 @@ function initZoneRecordModalActions() {
     const context = activeZoneRecordContext;
     if (!context?.zone?.id) return;
 
-    if (context.mode !== "create") return;
-
     const ownerRaw = document.getElementById("zrEditOwner")?.value ?? "";
     const type = document.getElementById("zrEditType")?.value ?? "A";
     const ttlRaw = document.getElementById("zrEditTtl")?.value ?? "";
@@ -1584,6 +1790,9 @@ function initZoneRecordModalActions() {
 
     if (ttl !== undefined) payload.ttl = ttl;
 
+    const desc = document.getElementById("zrEditDescription")?.value.trim() ?? "";
+    if (desc) payload.description = desc;
+
     for (const field of rr.getRdataFields()) {
       const input = document.getElementById(`zrEdit${fieldToId(field)}`);
       if (!input) continue;
@@ -1592,16 +1801,30 @@ function initZoneRecordModalActions() {
 
     saveButton.disabled = true;
     try {
-      const response = await ajax({
-        method: "POST",
-        url: `${API_URI}/zone_record`,
-        payload,
-      });
+      if (context.mode === "create") {
+        const response = await ajax({
+          method: "POST",
+          url: `${API_URI}/zone_record`,
+          payload,
+        });
 
-      if (!response || response?.error) {
-        console.error("Create zone record failed:", response, payload);
-        alert(response?.message ?? "Create failed. See console for details.");
-        return;
+        if (!response || response?.error) {
+          console.error("Create zone record failed:", response, payload);
+          alert(response?.message ?? "Create failed. See console for details.");
+          return;
+        }
+      } else {
+        const response = await ajax({
+          method: "PUT",
+          url: `${API_URI}/zone_record/${context.zr.id}`,
+          payload,
+        });
+
+        if (!response || response?.error) {
+          console.error("Update zone record failed:", response, payload);
+          alert(response?.message ?? "Update failed. See console for details.");
+          return;
+        }
       }
 
       const modalEl = document.getElementById("zrEditModal");
@@ -1609,8 +1832,8 @@ function initZoneRecordModalActions() {
       modal.hide();
       showZoneRecords(context.zone);
     } catch (error) {
-      console.error("Create zone record request failed:", error);
-      alert("Create failed due to a network or server error.");
+      console.error("Zone record save request failed:", error);
+      alert("Save failed due to a network or server error.");
     } finally {
       saveButton.disabled = false;
     }
@@ -1651,10 +1874,10 @@ function populateZrEditType() {
   for (const el of Object.values(groups)) sel.appendChild(el);
 }
 
-function getRdataInput(field, value = "", rr) {
+function getRdataInput(field, value = "", rr, placeholder = " ") {
   const eid = `zrEdit${fieldToId(field)}`;
 
-  let input = `<input type="text" class="form-control" id="${eid}" value="${escapeHtml(`${value ?? ""}`)}" placeholder=" ">`;
+  let input = `<input type="text" class="form-control" id="${eid}" value="${escapeHtml(`${value ?? ""}`)}" placeholder="${escapeHtml(placeholder)}">`;
 
   if (rr[`get${rr.ucFirst(field)}Options`]) {
     input = `<select class="form-select" id="${eid}">`;
@@ -1678,7 +1901,7 @@ function getRdataInput(field, value = "", rr) {
       case "protocol":
       case "service":
       case "weight":
-        input = `<input type="number" class="form-control" id="${eid}" value="${escapeHtml(`${value ?? ""}`)}" placeholder=" ">`;
+        input = `<input type="number" class="form-control" id="${eid}" value="${escapeHtml(`${value ?? ""}`)}" placeholder="${escapeHtml(placeholder)}">`;
         break;
     }
   }
@@ -1731,13 +1954,20 @@ function populateZrEditRdata(rr, zr) {
   let editData = document.getElementById("zrEditRdata");
   editData.innerHTML = "";
 
+  const canonical = rr.getCanonical();
   for (const f of rr.getRdataFields()) {
-    editData.innerHTML += getRdataInput(f, zr[f], rr);
+    const ph = canonical[f] !== undefined ? String(canonical[f]) : " ";
+    editData.innerHTML += getRdataInput(f, zr[f], rr, ph);
   }
 
   for (const f of rr.getRdataFields()) {
     const t = document.getElementById(`zrEdit${fieldToId(f)}`);
     if (!t) continue;
+
+    const helpEl = document.getElementById(`zrEdit${rr.ucFirst(f)}Help`);
+    if (helpEl && !helpEl.textContent && canonical[f] !== undefined) {
+      helpEl.textContent = `e.g. ${canonical[f]}`;
+    }
 
     t.addEventListener("change", (event) => {
       changeRDataField(f, rr, event);
@@ -1820,16 +2050,22 @@ function editZoneRecord(zone, zr, rr) {
       .join(", ")}`;
   });
 
+  const descEl = document.getElementById("zrEditDescription");
+  if (descEl) descEl.value = zr.description ?? "";
+
   populateZrEditRdata(rr, zr);
 }
 
-document
-  .getElementById("login_form_submit")
-  .addEventListener("click", (event) => {
-    attemptLogin();
-  });
+document.getElementById("login_form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  attemptLogin();
+});
 document.getElementById("logout_button").addEventListener("click", (event) => {
   attemptLogout();
+});
+document.getElementById("profileMenuItem").addEventListener("click", (event) => {
+  event.preventDefault();
+  if (currentUser) openUserPane(currentUser);
 });
 
 onLoad();

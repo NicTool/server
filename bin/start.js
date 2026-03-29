@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { execFile, spawn } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import net from 'node:net'
 import os from 'node:os'
@@ -11,6 +11,7 @@ import { parseArgs, promisify } from 'node:util'
 import { parse, stringify } from 'smol-toml'
 
 import { startServer } from '../index.js'
+import { init as initAPI } from '@nictool/api/routes/index.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -92,8 +93,9 @@ const port = (await resolvePort(host, 443)) ?? (await resolvePort(host, 8443)) ?
 
 if (nicConfig?.configured === true) {
   console.log('Already configured — starting services.')
-  const apiProcess = await maybeStartAPI(nicConfig)
-  await startServer({ configDir, tls, host, port, nicConfig, apiProcess })
+  const apiServer = await maybeInitAPI(nicConfig)
+  const apiRemoteUrl = buildRemoteUrl(nicConfig)
+  await startServer({ configDir, tls, host, port, nicConfig, apiServer, apiRemoteUrl })
 } else {
   // ---------------------------------------------------------------------------
   // Pre-select a random port to suggest for the API in the configuration form
@@ -101,10 +103,8 @@ if (nicConfig?.configured === true) {
 
   const suggestedApiPort = await randomAvailablePort(host)
 
-  const apiProcess = await maybeStartAPI(nicConfig)
-
   // ---------------------------------------------------------------------------
-  // Start configurator; close it after the config is saved
+  // Start configurator; wire up API once config is saved
   // ---------------------------------------------------------------------------
 
   await startServer({
@@ -113,12 +113,12 @@ if (nicConfig?.configured === true) {
     host,
     port,
     nicConfig,
-    apiProcess,
     suggestedPorts: { api: suggestedApiPort },
-    startAPI: (config) => maybeStartAPI(config),
-    onSaved: async (config, { apiProcess: currentApiProcess }) => {
-      // API may already be running from a live toggle — only start if not
-      if (!currentApiProcess) await maybeStartAPI(config)
+    onSaved: async (config, ctx) => {
+      if (!ctx.apiServer && !ctx.apiRemoteUrl) {
+        ctx.apiServer = await maybeInitAPI(config)
+        ctx.apiRemoteUrl = buildRemoteUrl(config)
+      }
     },
   })
 }
@@ -226,57 +226,35 @@ async function readNicToolToml(tomlPath) {
   }
 }
 
-/**
- * Return true if `host` resolves to a local address this machine controls.
- */
-function isLocalHost(host) {
-  if (!host) return false
-  if (host === 'localhost' || host === os.hostname()) return true
-  // Any loopback or private-range IP
-  if (/^127\./.test(host)) return true
-  if (/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(host)) return true
-  // Check against all local network interfaces
-  const ifaces = os.networkInterfaces()
-  return Object.values(ifaces).flat().some((i) => i.address === host)
-}
-
-/**
- * If nictool.toml specifies a local api.host, update the API package's
- * http.toml with the configured port and spawn it as a supervised child process.
- */
 function storeTypeToEnv(type) {
   if (type === 'directory') return 'toml'
   return type ?? 'mysql'
 }
 
-async function maybeStartAPI(config) {
-  if (!config || !config.api || !isLocalHost(config.api.host)) return null
-  if (config.api?.start === false) return null
+/**
+ * Return the remote API base URL (e.g. "https://api.example.com:3000") when
+ * api.mode is "remote", otherwise null.
+ */
+function buildRemoteUrl(config) {
+  if (!config?.api || config.api.mode !== 'remote') return null
+  const { host, port } = config.api
+  if (!host || !port) return null
+  const scheme = /^(localhost|127\.|::1)/.test(host) ? 'http' : 'https'
+  return `${scheme}://${host}:${port}`
+}
+
+/**
+ * When api.mode is "local" (or unset), patch the API's mysql.toml, set
+ * required env vars, and initialize the Hapi server in-process without
+ * binding to any port.
+ *
+ * @returns {Promise<import('@hapi/hapi').Server|null>}
+ */
+async function maybeInitAPI(config) {
+  if (!config || !config.api) return null
+  if (config.api.mode === 'remote') return null
 
   const apiPkgDir = new URL('../node_modules/@nictool/api', import.meta.url).pathname
-  const serverJs = path.join(apiPkgDir, 'server.js')
-
-  try {
-    await fs.access(serverJs, fs.constants.R_OK)
-  } catch {
-    console.warn(`API server not found at ${serverJs} — skipping API startup`)
-    return null
-  }
-
-  // Patch the API's http.toml host+port to match nictool.toml
-  const httpTomlPath = path.join(apiPkgDir, 'conf.d', 'http.toml')
-  try {
-    const content = await fs.readFile(httpTomlPath, 'utf8')
-    const httpCfg = parse(content)
-    if (httpCfg.host !== config.api.host || httpCfg.port !== config.api.port) {
-      httpCfg.host = config.api.host
-      httpCfg.port = config.api.port
-      await fs.writeFile(httpTomlPath, stringify(httpCfg))
-    }
-  } catch (err) {
-    console.warn(`Could not update API http.toml: ${err.message} — skipping API startup`)
-    return null
-  }
 
   // Patch the API's mysql.toml when nictool.toml uses a mysql store
   if (config.store?.type === 'mysql') {
@@ -296,29 +274,19 @@ async function maybeStartAPI(config) {
     }
   }
 
-  const storeEnv = {
-    NICTOOL_DATA_STORE: storeTypeToEnv(config.store?.type),
+  // Set process env vars the API reads at init time
+  process.env.NICTOOL_DATA_STORE = storeTypeToEnv(config.store?.type)
+  if (config.store?.path) process.env.NICTOOL_DATA_STORE_PATH = config.store.path
+  if (config.store?.dsn)  process.env.NICTOOL_DATA_STORE_DSN  = config.store.dsn
+
+  try {
+    const hapiServer = await initAPI()
+    console.log('API initialized in-process')
+    return hapiServer
+  } catch (err) {
+    console.error(`API init failed: ${err.message}`)
+    return null
   }
-  if (config.store?.path) storeEnv.NICTOOL_DATA_STORE_PATH = config.store.path
-  if (config.store?.dsn)  storeEnv.NICTOOL_DATA_STORE_DSN  = config.store.dsn
-
-  const child = spawn(process.execPath, [serverJs], {
-    cwd: apiPkgDir,
-    stdio: 'inherit',
-    env: {
-      ...process.env,
-      NODE_ENV: process.env.NODE_ENV || 'production',
-      ...storeEnv,
-    },
-  })
-
-  child.on('error', (err) => console.error(`API process error: ${err.message}`))
-  child.on('exit', (code, signal) => {
-    if (signal) console.log(`API process killed by signal ${signal}`)
-    else console.log(`API process exited with code ${code}`)
-  })
-
-  return child
 }
 
 /**

@@ -40,12 +40,6 @@
   background-color: transparent;
 }
 
-#zone_table .zone-records-panel .paginate_button,
-#zone_table .zone-records-panel .dt-paging-button {
-  font-size: 0.8rem;
-  padding: 0.1rem 0.35rem !important;
-}
-
 #zone_table .zone-records-table td.small {
   font-size: 0.9rem;
 }
@@ -65,12 +59,14 @@
   line-height: 1.15;
 }
 
-#zone_table .zone-records-table > thead > tr > th {
+#zone_table .zone-records-table > thead > tr > th,
+#ns_table > thead > tr > th {
   background-color: transparent !important;
   color: var(--bs-secondary-color);
 }
 
-#zone_table .zone-records-table > tbody > tr:nth-of-type(odd) > * {
+#zone_table .zone-records-table > tbody > tr:nth-of-type(odd) > *,
+#ns_table .ns-table > tbody > tr:nth-of-type(odd) > * {
   background-color: transparent !important;
 }
 
@@ -104,7 +100,11 @@
 }
 
 #zone_table_wrapper .paginate_button,
-#zone_table_wrapper .dt-paging-button {
+#zone_table .zone-records-panel .paginate_button,
+#zone_table .zone-records-panel .dt-paging-button,
+#zone_table_wrapper .dt-paging-button,
+#ns_table_wrapper   .dt-paging-button,
+#user_table_wrapper .dt-paging-button {
   font-size: 0.8rem;
   padding: 0.1rem 0.35rem !important;
 }
@@ -125,11 +125,12 @@
   font-size: 0.9rem;
   padding-top: 0.2rem;
   padding-bottom: 0.2rem;
+  border-color: white;
 }
 
-#ns_table > thead > tr > th {
+/* Even rows transparent (only odd rows get the stripe) */
+#ns_table_wrapper #ns_table tbody tr:nth-of-type(even) > * {
   background-color: transparent !important;
-  color: var(--bs-secondary-color);
 }
 
 /* Subdue NS and Users DataTable length/info/paging controls */
@@ -155,11 +156,6 @@
   background-color: transparent;
 }
 
-#ns_table_wrapper .dt-paging-button,
-#user_table_wrapper .dt-paging-button {
-  font-size: 0.8rem;
-  padding: 0.1rem 0.35rem !important;
-}
 
 /* Group dropdown hover submenu (springs to the left) */
 #group_dropdown_menu li.has-submenu {
