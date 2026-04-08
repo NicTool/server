@@ -109,6 +109,5 @@ out
 config.yml
 CLAUDE.md
 GEMINI.md
-.release/
 data/
 conf.d
