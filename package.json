@@ -1,6 +1,6 @@
 {
   "name": "nictool",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "NicTool, the DNS manager",
   "main": "index.js",
   "type": "module",
@@ -40,11 +40,11 @@
   },
   "homepage": "https://github.com/NicTool/server#readme",
   "dependencies": {
-    "joi": "^18.1.1",
-    "@nictool/api": "^3.0.0-alpha.10",
-    "@nictool/dns-nameserver": "^0.7.3",
+    "joi": "^18.1.2",
+    "@nictool/api": "^3.0.0-alpha.11",
+    "@nictool/dns-nameserver": "^0.7.4",
     "@nictool/dns-resource-record": "^1.6.0",
-    "@nictool/dns-zone": "^1.1.7",
+    "@nictool/dns-zone": "^1.1.8",
     "smol-toml": "^1.6.1"
   }
 }
