@@ -46,5 +46,10 @@
     "@nictool/dns-resource-record": "^1.6.0",
     "@nictool/dns-zone": "^1.1.8",
     "smol-toml": "^1.6.1"
+  },
+  "prettier": {
+    "printWidth": 90,
+    "singleQuote": true,
+    "semi": false
   }
 }
