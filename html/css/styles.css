@@ -65,8 +65,7 @@
   color: var(--bs-secondary-color);
 }
 
-#zone_table .zone-records-table > tbody > tr:nth-of-type(odd) > *,
-#ns_table .ns-table > tbody > tr:nth-of-type(odd) > * {
+#zone_table .zone-records-table > tbody > tr:nth-of-type(odd) > * {
   background-color: transparent !important;
 }
 

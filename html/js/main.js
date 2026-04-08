@@ -479,6 +479,12 @@ function initZoneControls() {
     if (!zoneDataTable) return;
     zoneDataTable.ajax.reload(null, true);
   });
+
+  const createBtn = document.getElementById("zoneCreateBtn");
+  if (createBtn && !createBtn.dataset.initialized) {
+    createBtn.dataset.initialized = "true";
+    createBtn.addEventListener("click", () => openCreateZoneModal());
+  }
 }
 
 function attemptLogin() {
@@ -624,17 +630,11 @@ function showNameservers() {
       tableHead.appendChild(filterRow);
     }
 
-    const createBtn = document.createElement("button");
-    createBtn.type = "button";
-    createBtn.className = "btn btn-sm btn-outline-secondary";
-    createBtn.textContent = "+ Create";
-    createBtn.addEventListener("click", () => openNsPane(null));
-
     nsDataTable = new DataTable(table, {
       orderCellsTop: true,
       pageLength: nsPageLength,
       lengthMenu: [10, 25, 50, 100],
-      layout: { topEnd: null },
+      layout: { topStart: 'info', bottomStart: 'pageLength', topEnd: null },
       columnDefs: [
         { orderable: false, searchable: false, targets: [5] },
       ],
@@ -648,17 +648,6 @@ function showNameservers() {
               if (this.search() !== input.value) this.search(input.value).draw();
             });
           });
-        }
-        // Place Create button in the top-right of the DataTable toolbar row
-        const container = api.table().container();
-        const topRow = container.querySelectorAll(".dt-layout-row")[0];
-        if (topRow) {
-          topRow.style.display = "flex";
-          topRow.style.alignItems = "center";
-          const btnCell = document.createElement("div");
-          btnCell.style.marginLeft = "auto";
-          btnCell.appendChild(createBtn);
-          topRow.appendChild(btnCell);
         }
       },
     });
@@ -682,6 +671,12 @@ function openNsPane(ns) {
 }
 
 function initNsControls() {
+  const createBtn = document.getElementById("nsCreateBtn");
+  if (createBtn && !createBtn.dataset.initialized) {
+    createBtn.dataset.initialized = "true";
+    createBtn.addEventListener("click", () => openNsPane(null));
+  }
+
   const deletedToggle = document.getElementById("nsShowDeleted");
   if (deletedToggle && !deletedToggle.dataset.initialized) {
     deletedToggle.dataset.initialized = "true";
@@ -765,14 +760,17 @@ function showUsers() {
       const row = document.createElement("tr");
       row.id = `user_${u.id}_tr`;
       if (u.deleted) row.classList.add("text-body-secondary");
+      const userActionButtons = u.deleted
+        ? `<button type="button" class="btn btn-sm btn-link text-success p-0 user-restore-btn" style="text-decoration:none;font-size:0.85rem;line-height:1;" title="Restore user">↩ Restore</button>`
+        : `<div class="d-inline-flex align-items-center gap-2"><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 user-edit-btn" style="text-decoration:none;font-size:0.9rem;line-height:1;" aria-label="Edit user">✎</button><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 user-delete-btn" style="text-decoration:none;font-size:0.9rem;line-height:1;" aria-label="Delete user" title="Delete user">🗑</button></div>`;
       row.innerHTML = `
         <td>${escapeHtml(u.username ?? "")}</td>
         <td>${escapeHtml((u.first_name ?? "") + (u.last_name ? " " + u.last_name : ""))}</td>
         <td>${escapeHtml(u.email ?? "")}</td>
-        <td style="text-align: center; white-space: nowrap"><div class="d-inline-flex align-items-center gap-2"><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 user-edit-btn" style="text-decoration:none;font-size:0.9rem;line-height:1;" aria-label="Edit user">✎</button><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 user-delete-btn" style="text-decoration:none;font-size:0.9rem;line-height:1;" aria-label="Delete user" title="Delete user">🗑</button></div></td>
+        <td style="text-align: center; white-space: nowrap">${userActionButtons}</td>
       `;
-      row.querySelector(".user-edit-btn").addEventListener("click", () => openUserPane(u));
-      row.querySelector(".user-delete-btn").addEventListener("click", () => {
+      row.querySelector(".user-edit-btn")?.addEventListener("click", () => openUserPane(u));
+      row.querySelector(".user-delete-btn")?.addEventListener("click", () => {
         if (isConfirmDeletesEnabled()) {
           const confirmed = window.confirm(`Delete user ${u.username}?`);
           if (!confirmed) return;
@@ -782,28 +780,40 @@ function showUsers() {
           showUsers();
         });
       });
+      row.querySelector(".user-restore-btn")?.addEventListener("click", () => {
+        ajax({ method: "PUT", url: `${API_URI}/user/${u.id}`, payload: { deleted: false } }).then((r) => {
+          if (r?.error) { console.error("Restore user failed:", r); return; }
+          showUsers();
+        });
+      });
       body.appendChild(row);
     }
 
-    const filterRow = tableHead.rows[0].cloneNode(true);
-    filterRow.classList.add("user-filter-row");
-    for (let i = 0; i < filterRow.cells.length; i++) {
-      const cell = filterRow.cells[i];
-      if (i === filterRow.cells.length - 1) { cell.innerHTML = ""; continue; }
-      const title = tableHead.rows[0].cells[i].textContent.trim();
-      cell.innerHTML = `<input type="search" class="form-control form-control-sm" placeholder="Search ${title}" aria-label="Search ${title}">`;
+    const userPageLength = 25;
+    const hasSearch = sorted.length > 10;
+    let filterRow;
+    if (hasSearch) {
+      filterRow = tableHead.rows[0].cloneNode(true);
+      filterRow.classList.add("user-filter-row");
+      for (let i = 0; i < filterRow.cells.length; i++) {
+        const cell = filterRow.cells[i];
+        if (i === filterRow.cells.length - 1) { cell.innerHTML = ""; continue; }
+        const title = tableHead.rows[0].cells[i].textContent.trim();
+        cell.innerHTML = `<input type="search" class="form-control form-control-sm" placeholder="Search ${title}" aria-label="Search ${title}">`;
+      }
+      tableHead.appendChild(filterRow);
     }
-    tableHead.appendChild(filterRow);
 
     userDataTable = new DataTable(table, {
       orderCellsTop: true,
-      pageLength: 25,
+      pageLength: userPageLength,
       lengthMenu: [10, 25, 50, 100],
-      layout: { topEnd: null },
+      layout: { topStart: 'info', bottomStart: 'pageLength', topEnd: null},
       columnDefs: [
         { orderable: false, searchable: false, targets: [3] },
       ],
       initComplete() {
+        if (!hasSearch) return;
         const api = this.api();
         api.columns().every(function (index) {
           const input = filterRow.cells[index].querySelector("input");
@@ -812,13 +822,6 @@ function showUsers() {
             if (this.search() !== input.value) this.search(input.value).draw();
           });
         });
-        const actionsCell = filterRow.cells[filterRow.cells.length - 1];
-        const createBtn = document.createElement("button");
-        createBtn.type = "button";
-        createBtn.className = "btn btn-sm btn-outline-secondary";
-        createBtn.textContent = "+ Create";
-        createBtn.addEventListener("click", () => openUserPane(null));
-        actionsCell.appendChild(createBtn);
       },
     });
   });
@@ -845,6 +848,12 @@ function initUserControls() {
   if (deletedToggle && !deletedToggle.dataset.initialized) {
     deletedToggle.dataset.initialized = "true";
     deletedToggle.addEventListener("change", () => showUsers());
+  }
+
+  const createBtn = document.getElementById("userCreateBtn");
+  if (createBtn && !createBtn.dataset.initialized) {
+    createBtn.dataset.initialized = "true";
+    createBtn.addEventListener("click", () => openUserPane(null));
   }
 
   const pwField = document.getElementById("userEditPassword");
@@ -954,7 +963,7 @@ function showZones() {
     orderCellsTop: true,
     pageLength: 25,
     lengthMenu: [10, 25, 50, 100],
-    layout: { topEnd: null },
+    layout: { topStart: 'info', bottomStart: 'pageLength', topEnd: null},
     columnDefs: [{ orderable: false, searchable: false, targets: [0, 3] }],
     order: [[1, "asc"]],
     columns: [
@@ -1068,16 +1077,6 @@ function showZones() {
         });
       });
 
-      // Add "+ Create Zone" button to Actions column of filter row
-      const actionsCell = filterRow.cells[filterRow.cells.length - 1];
-      const createBtn = document.createElement("button");
-      createBtn.type = "button";
-      createBtn.className = "btn btn-sm btn-outline-secondary";
-      createBtn.title = "Create new zone";
-      createBtn.setAttribute("aria-label", "Create new zone");
-      createBtn.textContent = "+ Create";
-      createBtn.addEventListener("click", () => openCreateZoneModal());
-      actionsCell.appendChild(createBtn);
     },
   });
 
@@ -1487,67 +1486,18 @@ function showZoneRecords(zone) {
     const infoEl = document.createElement("div");
     infoEl.className = "small text-body-secondary py-1";
 
-    let pageLenSelect = null;
-    if (hasTableControls) {
-      pageLenSelect = document.createElement("select");
-      pageLenSelect.className = "form-select form-select-sm d-inline-block";
-      pageLenSelect.style.cssText = "width:auto;padding:0.1rem 1.5rem 0.1rem 0.4rem;font-size:inherit;vertical-align:baseline;";
-      for (const n of [10, 25, 50]) {
-        const opt = document.createElement("option");
-        opt.value = n;
-        opt.textContent = n;
-        if (n === 10) opt.selected = true;
-        pageLenSelect.appendChild(opt);
-      }
-    }
-
-    let zrDt;
-    const updateInfoEl = (api) => {
-      const dtApi = api ?? zrDt;
-      if (!dtApi) return;
-      const pg = dtApi.page.info();
-      infoEl.innerHTML = "";
-      if (hasTableControls) {
-        infoEl.appendChild(document.createTextNode(`Showing ${pg.start + 1} to `));
-        infoEl.appendChild(pageLenSelect);
-        infoEl.appendChild(document.createTextNode(` of ${pg.recordsDisplay} resource records`));
-      } else {
-        infoEl.textContent = `Showing ${pg.start + 1} to ${pg.end} of ${pg.recordsDisplay} resource records`;
-      }
-    };
-
-    if (pageLenSelect) {
-      pageLenSelect.addEventListener("change", () => {
-        zrDt?.page.len(+pageLenSelect.value).draw();
-      });
-    }
-
-    zrDt = new DataTable(table, {
+    let zrDt = new DataTable(table, {
       order: [[0, "asc"], [1, "asc"]],
       orderFixed: { pre: [[0, "asc"]] },
-      pageLength: 10,
+      pageLength: 15,
+      lengthMenu: [15, 25, 50, 100],
       searching: false,
       paging: hasTableControls,
-      info: false,
-      lengthChange: false,
-      layout: {
-        topStart: null,
-        topEnd: null,
-        bottomStart: null,
-      },
+      layout: { topStart: 'info', bottomStart: 'pageLength', topEnd: null},
       columnDefs: [
         { visible: false, orderable: false, searchable: false, targets: [0] },
         { orderable: false, searchable: false, targets: [-1] },
       ],
-      initComplete() {
-        const api = this.api();
-        const container = api.table().container();
-        container.parentElement.insertBefore(infoEl, container);
-        updateInfoEl(api);
-      },
-      drawCallback() {
-        updateInfoEl();
-      },
     });
     zoneRecordDataTables.set(zone.id, zrDt);
   });
