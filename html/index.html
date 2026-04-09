@@ -84,6 +84,18 @@
               aria-selected="false"
             >Users</button>
           </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link"
+              id="tab-groups"
+              data-bs-toggle="tab"
+              data-bs-target="#groups_div"
+              type="button"
+              role="tab"
+              aria-controls="groups_div"
+              aria-selected="false"
+            >Groups</button>
+          </li>
         </ul>
 
         <ul class="navbar-nav gap-3">
@@ -289,6 +301,45 @@
                   id="userShowDeleted"
                 />
                 <label class="form-check-label" for="userShowDeleted">Show deleted</label>
+              </div>
+            </div>
+          </div>
+
+          <div id="groups_div" class="tab-pane fade" role="tabpanel" aria-labelledby="tab-groups">
+            <div class="d-flex justify-content-end mb-1">
+              <button id="groupCreateBtn" type="button" class="btn btn-sm btn-outline-secondary">+ Create</button>
+            </div>
+            <table
+              id="group_table"
+              class="col-11 table table-striped table-hover table-bordered"
+            >
+              <thead>
+                <tr>
+                  <th style="text-align: left">Name</th>
+                  <th style="text-align: left">Parent</th>
+                  <th style="text-align: center">Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <div class="d-flex gap-3 mt-3 text-body-secondary small flex-wrap">
+              <div class="form-check form-switch">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  role="switch"
+                  id="groupShowDeleted"
+                />
+                <label class="form-check-label" for="groupShowDeleted">Show deleted</label>
+              </div>
+              <div class="form-check form-switch">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  role="switch"
+                  id="groupShowSubgroups"
+                />
+                <label class="form-check-label" for="groupShowSubgroups">Subgroups</label>
               </div>
             </div>
           </div>
@@ -669,6 +720,36 @@
         <div class="d-flex justify-content-end gap-2 mt-4">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="offcanvas">Cancel</button>
           <button type="button" class="btn btn-primary" id="nsEditSaveBtn">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Group create/edit pane -->
+    <div
+      class="offcanvas offcanvas-end"
+      tabindex="-1"
+      id="groupEditPane"
+      aria-labelledby="groupEditPaneLabel"
+      style="width: 380px;"
+    >
+      <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title" id="groupEditPaneLabel">Group</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+      </div>
+      <div class="offcanvas-body">
+        <div class="form-floating mb-3">
+          <input type="text" class="form-control" id="groupEditName" placeholder="My Group" />
+          <label for="groupEditName">Name</label>
+        </div>
+        <div class="form-floating mb-3">
+          <select class="form-select" id="groupEditParent">
+            <option value="">-- Root --</option>
+          </select>
+          <label for="groupEditParent">Parent Group</label>
+        </div>
+        <div class="d-flex justify-content-end gap-2 mt-4">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="offcanvas">Cancel</button>
+          <button type="button" class="btn btn-primary" id="groupEditSaveBtn">Save</button>
         </div>
       </div>
     </div>

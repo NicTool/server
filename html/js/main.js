@@ -4,6 +4,7 @@ const API_URI = "/api";
 let nsDataTable;
 let zoneDataTable;
 let userDataTable;
+let groupDataTable;
 const zoneRecordDataTables = new Map();
 const zoneColumnSearchTimers = new Map();
 const RR_DATA_PREVIEW_CHARS = 50;
@@ -278,6 +279,7 @@ function onLoad() {
   initDangerousModeToggle();
   initNsControls();
   initUserControls();
+  initGroupControls();
 
   if (!Cookie.get("nt-token")) {
     console.log(`Cookie/token not found`);
@@ -388,6 +390,7 @@ function switchGroup(gid, name) {
   }
   showNameservers();
   showUsers();
+  showGroups();
 }
 
 function onLoggedIn(response) {
@@ -421,6 +424,7 @@ function onLoggedIn(response) {
           if (zoneDataTable) zoneDataTable.ajax.reload(null, true); else showZones();
           showNameservers();
           showUsers();
+          showGroups();
           return;
         }
 
@@ -455,6 +459,7 @@ function onLoggedIn(response) {
   showNameservers();
   showZones();
   showUsers();
+  showGroups();
 }
 
 function onLoggedOut() {
@@ -920,6 +925,206 @@ function initUserControls() {
         showUsers();
       } catch (err) {
         console.error("User save failed:", err);
+        alert("Save failed due to a network error.");
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Groups tab
+// ---------------------------------------------------------------------------
+
+let allGroupsCache = [];
+
+async function showGroups() {
+  // Fetch all groups for parent name lookup
+  const allRes = await ajax({ method: "GET", url: `${API_URI}/group?include_subgroups=true` });
+  const groupNameMap = new Map();
+  for (const g of allRes.group ?? []) groupNameMap.set(g.id, g.name);
+
+  const params = new URLSearchParams();
+  if (document.getElementById("groupShowDeleted")?.checked) params.set("deleted", "true");
+  if (document.getElementById("groupShowSubgroups")?.checked) params.set("include_subgroups", "true");
+  if (currentGroupId) params.set("parent_gid", `${currentGroupId}`);
+
+  ajax({
+    method: "GET",
+    url: `${API_URI}/group${params.toString() ? "?" + params.toString() : ""}`,
+  }).then((response) => {
+    const table = document.getElementById("group_table");
+    const tableHead = table.querySelector("thead");
+
+    while (tableHead.rows.length > 1) tableHead.deleteRow(1);
+
+    if (groupDataTable) {
+      groupDataTable.destroy();
+      groupDataTable = undefined;
+    }
+
+    const body = table.querySelector("tbody");
+    body.innerHTML = "";
+
+    const groups = (response.group ?? []).slice().sort((a, b) => Number(a.id) - Number(b.id));
+
+    for (const g of groups) {
+      const row = document.createElement("tr");
+      row.id = `group_${g.id}_tr`;
+      if (g.deleted) row.classList.add("text-body-secondary");
+
+      const parentName = g.parent_gid === 0 ? "(root)" : (groupNameMap.get(g.parent_gid) ?? `#${g.parent_gid}`);
+      const actionButtons = g.deleted
+        ? `<button type="button" class="btn btn-sm btn-link text-success p-0 group-restore-btn" style="text-decoration:none;font-size:0.85rem;line-height:1;" title="Restore group">↩ Restore</button>`
+        : `<div class="d-inline-flex align-items-center gap-2"><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 group-edit-btn" style="text-decoration:none;font-size:0.9rem;line-height:1;" aria-label="Edit group">✎</button><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 group-delete-btn" style="text-decoration:none;font-size:0.9rem;line-height:1;" aria-label="Delete group" title="Delete group">🗑</button></div>`;
+      row.innerHTML = `
+        <td><a href="#" class="group-nav-link text-decoration-none">${escapeHtml(g.name ?? "")}</a></td>
+        <td>${escapeHtml(parentName)}</td>
+        <td style="text-align: center; white-space: nowrap">${actionButtons}</td>
+      `;
+      row.querySelector(".group-nav-link")?.addEventListener("click", (e) => {
+        e.preventDefault();
+        groupHistory.push({ id: currentGroupId, name: document.getElementById("group_dropdown_label")?.textContent ?? "Group" });
+        switchGroup(g.id, g.name);
+      });
+      row.querySelector(".group-edit-btn")?.addEventListener("click", () => openGroupPane(g));
+      row.querySelector(".group-delete-btn")?.addEventListener("click", () => {
+        if (isConfirmDeletesEnabled()) {
+          const confirmed = window.confirm(`Delete group "${g.name}"?`);
+          if (!confirmed) return;
+        }
+        ajax({ method: "DELETE", url: `${API_URI}/group/${g.id}` }).then((r) => {
+          if (r?.error) { console.error("Delete group failed:", r); return; }
+          showGroups();
+          loadGroupMenu(currentGroupId, document.getElementById("group_dropdown_label")?.textContent ?? "Group");
+        });
+      });
+      row.querySelector(".group-restore-btn")?.addEventListener("click", () => {
+        ajax({ method: "PUT", url: `${API_URI}/group/${g.id}`, payload: { deleted: false } }).then((r) => {
+          if (r?.error) { console.error("Restore group failed:", r); return; }
+          showGroups();
+        });
+      });
+      body.appendChild(row);
+    }
+
+    const hasSearch = groups.length > 10;
+    let filterRow;
+    if (hasSearch) {
+      filterRow = tableHead.rows[0].cloneNode(true);
+      filterRow.classList.add("group-filter-row");
+      for (let i = 0; i < filterRow.cells.length; i++) {
+        const cell = filterRow.cells[i];
+        if (i === filterRow.cells.length - 1) { cell.innerHTML = ""; continue; }
+        const title = tableHead.rows[0].cells[i].textContent.trim();
+        cell.innerHTML = `<input type="search" class="form-control form-control-sm" placeholder="Search ${title}" aria-label="Search ${title}">`;
+      }
+      tableHead.appendChild(filterRow);
+    }
+
+    groupDataTable = new DataTable(table, {
+      orderCellsTop: true,
+      pageLength: 25,
+      lengthMenu: [10, 25, 50, 100],
+      layout: { topStart: 'info', bottomStart: 'pageLength', topEnd: null },
+      columnDefs: [
+        { orderable: false, searchable: false, targets: [2] },
+      ],
+      initComplete() {
+        if (!hasSearch) return;
+        const api = this.api();
+        api.columns().every(function (index) {
+          const input = filterRow.cells[index].querySelector("input");
+          if (!input) return;
+          input.addEventListener("input", () => {
+            if (this.search() !== input.value) this.search(input.value).draw();
+          });
+        });
+      },
+    });
+  });
+}
+
+let activeGroupContext = null;
+
+async function openGroupPane(group) {
+  activeGroupContext = group ? { mode: "edit", group } : { mode: "create" };
+  const isCreate = !group;
+  document.getElementById("groupEditPaneLabel").textContent = isCreate ? "Create Group" : "Edit Group";
+  document.getElementById("groupEditName").value = group?.name ?? "";
+  document.getElementById("groupEditSaveBtn").textContent = isCreate ? "Create" : "Save";
+
+  // Populate parent dropdown with all groups
+  const parentSelect = document.getElementById("groupEditParent");
+  parentSelect.innerHTML = '<option value="">-- Root --</option>';
+  try {
+    const res = await ajax({ method: "GET", url: `${API_URI}/group?include_subgroups=true` });
+    for (const g of res.group ?? []) {
+      if (group && g.id === group.id) continue; // can't be your own parent
+      const opt = document.createElement("option");
+      opt.value = g.id;
+      opt.textContent = g.name;
+      parentSelect.appendChild(opt);
+    }
+  } catch (e) { /* best effort */ }
+
+  parentSelect.value = group?.parent_gid ?? currentGroupId ?? "";
+
+  bootstrap.Offcanvas.getOrCreateInstance(document.getElementById("groupEditPane")).show();
+}
+
+function initGroupControls() {
+  const deletedToggle = document.getElementById("groupShowDeleted");
+  if (deletedToggle && !deletedToggle.dataset.initialized) {
+    deletedToggle.dataset.initialized = "true";
+    deletedToggle.addEventListener("change", () => showGroups());
+  }
+
+  const subgroupToggle = document.getElementById("groupShowSubgroups");
+  if (subgroupToggle && !subgroupToggle.dataset.initialized) {
+    subgroupToggle.dataset.initialized = "true";
+    subgroupToggle.addEventListener("change", () => showGroups());
+  }
+
+  const createBtn = document.getElementById("groupCreateBtn");
+  if (createBtn && !createBtn.dataset.initialized) {
+    createBtn.dataset.initialized = "true";
+    createBtn.addEventListener("click", () => openGroupPane(null));
+  }
+
+  const saveBtn = document.getElementById("groupEditSaveBtn");
+  if (saveBtn && !saveBtn.dataset.initialized) {
+    saveBtn.dataset.initialized = "true";
+    saveBtn.addEventListener("click", async () => {
+      const ctx = activeGroupContext;
+      if (!ctx) return;
+
+      const name = document.getElementById("groupEditName").value.trim();
+      if (!name) { alert("Group name is required."); return; }
+
+      const parentVal = document.getElementById("groupEditParent").value;
+      const payload = { name };
+      if (parentVal) payload.parent_gid = parseInt(parentVal, 10);
+      else if (ctx.mode === "create") payload.parent_gid = currentGroupId ?? 0;
+
+      const method = ctx.mode === "create" ? "POST" : "PUT";
+      const url = ctx.mode === "create"
+        ? `${API_URI}/group`
+        : `${API_URI}/group/${ctx.group.id}`;
+
+      saveBtn.disabled = true;
+      try {
+        const response = await ajax({ method, url, payload });
+        if (!response || response?.error) {
+          alert(response?.message ?? "Save failed. See console for details.");
+          return;
+        }
+        bootstrap.Offcanvas.getOrCreateInstance(document.getElementById("groupEditPane")).hide();
+        showGroups();
+        loadGroupMenu(currentGroupId, document.getElementById("group_dropdown_label")?.textContent ?? "Group");
+      } catch (err) {
+        console.error("Group save failed:", err);
         alert("Save failed due to a network error.");
       } finally {
         saveBtn.disabled = false;
