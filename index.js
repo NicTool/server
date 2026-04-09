@@ -52,16 +52,28 @@ export async function startServer({
   // ctx is mutated as services start/stop
   const ctx = { configDir, tomlPath, nicConfig, apiServer, apiRemoteUrl, suggestedPorts, host, onSaved }
 
-  const server = https.createServer({ cert: tls.cert, key: tls.key }, (req, res) =>
-    handleRequest(req, res, ctx),
-  )
+  const useTLS = tls?.cert && tls?.key
+  const handler = (req, res) => handleRequest(req, res, ctx)
+  const server = useTLS
+    ? https.createServer({ cert: tls.cert, key: tls.key }, handler)
+    : http.createServer(handler)
+
+  if (useTLS) {
+    server.on('clientError', (_err, socket) => socket.destroy())
+    server.on('tlsClientError', (_err, socket) => socket.destroy())
+  }
+  server.on('connection', (socket) => {
+    socket.on('error', () => socket.destroy())
+  })
 
   await new Promise((resolve, reject) => {
     server.once('error', reject)
-    server.listen(port, host, resolve)
+    server.listen(port, process.env.NICTOOL_BIND_HOST || host, resolve)
   })
 
-  const url = `https://${host}${port === 443 ? '' : `:${port}`}`
+  const scheme = useTLS ? 'https' : 'http'
+  const defaultPort = useTLS ? 443 : 80
+  const url = `${scheme}://${host}${port === defaultPort ? '' : `:${port}`}`
   console.log(`Configurator: ${url}`)
 
   return server
@@ -88,7 +100,7 @@ async function handleRequest(req, res, ctx) {
 
     if (url?.startsWith('/api/') || url?.startsWith('/doc')) {
       if (ctx.apiServer) return await forwardToAPI(req, res, ctx.apiServer)
-      if (ctx.apiRemoteUrl) return forwardToRemote(req, res, ctx.apiRemoteUrl)
+      if (ctx.apiRemoteUrl) return await forwardToRemote(req, res, ctx.apiRemoteUrl)
     }
 
     if (method === 'GET' && url?.startsWith('/nictool/')) return await serveStatic(req, res, path.join(__dirname, 'node_modules', '@nictool'), '/nictool/')

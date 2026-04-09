@@ -16,6 +16,28 @@ import { init as initAPI } from '@nictool/api/routes/index.js'
 const execFileAsync = promisify(execFile)
 
 // ---------------------------------------------------------------------------
+// Prevent stray TLS errors (e.g. plain HTTP hitting the HTTPS port) from
+// crashing the process.  Only EPROTO is swallowed; everything else exits.
+// ---------------------------------------------------------------------------
+process.on('uncaughtException', (err) => {
+  if (err.code === 'EPROTO') {
+    console.error(`[uncaughtException] TLS error (ignored): ${err.message}`)
+    return
+  }
+  console.error('[uncaughtException] Fatal:', err)
+  process.exit(1)
+})
+
+process.on('unhandledRejection', (reason) => {
+  if (reason?.code === 'EPROTO') {
+    console.error(`[unhandledRejection] TLS error (ignored): ${reason.message}`)
+    return
+  }
+  console.error('[unhandledRejection] Fatal:', reason)
+  process.exit(1)
+})
+
+// ---------------------------------------------------------------------------
 // CLI arguments
 // ---------------------------------------------------------------------------
 
@@ -55,23 +77,29 @@ try {
 }
 
 // ---------------------------------------------------------------------------
-// TLS – discover existing certs or generate a self-signed one
+// TLS – skip entirely in development mode, otherwise discover or generate
 // ---------------------------------------------------------------------------
 
+const useTLS = (process.env.NICTOOL_TLS ?? 'auto') !== 'false'
 const osHostname = os.hostname()
-const tlsDir = path.join(configDir, 'etc', 'tls')
+let tls = null
+let host = osHostname
 
-const discovered = await discoverTLS(tlsDir, osHostname)
-let tls, host
-
-if (discovered) {
-  const { hostname: certHost, ...pemMaterial } = discovered
-  tls = pemMaterial
-  host = certHost
+if (!useTLS) {
+  console.log('TLS disabled (NICTOOL_TLS=false) — running plain HTTP')
+  host = 'localhost'
 } else {
-  console.log(`Generating self-signed cert for ${osHostname}`)
-  tls = await generateTLS(tlsDir, osHostname)
-  host = osHostname
+  const tlsDir = path.join(configDir, 'etc', 'tls')
+  const discovered = await discoverTLS(tlsDir, osHostname)
+
+  if (discovered) {
+    const { hostname: certHost, ...pemMaterial } = discovered
+    tls = pemMaterial
+    host = certHost
+  } else {
+    console.log(`Generating self-signed cert for ${osHostname}`)
+    tls = await generateTLS(tlsDir, osHostname)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -82,10 +110,12 @@ const tomlPath = path.join(configDir, 'etc', 'nictool.toml')
 const nicConfig = await readNicToolToml(tomlPath)
 
 // ---------------------------------------------------------------------------
-// Port selection – prefer 443, fall back to 8443
+// Port selection – HTTP prefers 8080, HTTPS prefers 443/8443
 // ---------------------------------------------------------------------------
 
-const port = (await resolvePort(host, 443)) ?? (await resolvePort(host, 8443)) ?? (await randomAvailablePort(host))
+const port = useTLS
+  ? ((await resolvePort(host, 443)) ?? (await resolvePort(host, 8443)) ?? (await randomAvailablePort(host)))
+  : ((await resolvePort(host, 8080)) ?? (await resolvePort(host, 80)) ?? (await randomAvailablePort(host)))
 
 // ---------------------------------------------------------------------------
 // If already configured, skip the configurator and go straight to services
@@ -237,9 +267,9 @@ function storeTypeToEnv(type) {
  */
 function buildRemoteUrl(config) {
   if (!config?.api || config.api.mode !== 'remote') return null
-  const { host, port } = config.api
+  const { host, port, scheme: configScheme } = config.api
   if (!host || !port) return null
-  const scheme = /^(localhost|127\.|::1)/.test(host) ? 'http' : 'https'
+  const scheme = configScheme ?? 'http'
   return `${scheme}://${host}:${port}`
 }
 
