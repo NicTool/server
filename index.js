@@ -58,7 +58,7 @@ export async function startServer({
 
   await new Promise((resolve, reject) => {
     server.once('error', reject)
-    server.listen(port, host, resolve)
+    server.listen(port, process.env.NICTOOL_BIND_HOST || host, resolve)
   })
 
   const url = `https://${host}${port === 443 ? '' : `:${port}`}`
