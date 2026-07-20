@@ -11,6 +11,7 @@ import { parseArgs, promisify } from 'node:util'
 import { parse, stringify } from 'smol-toml'
 
 import { startServer } from '../index.js'
+import NameserverSupervisor from '../lib/nameservers.js'
 import { init as initAPI } from '@nictool/api/routes/index.js'
 
 const execFileAsync = promisify(execFile)
@@ -91,11 +92,26 @@ const port = (await resolvePort(host, 443)) ?? (await resolvePort(host, 8443)) ?
 // If already configured, skip the configurator and go straight to services
 // ---------------------------------------------------------------------------
 
+const supervisor = new NameserverSupervisor()
+
+async function shutdown() {
+  try { await supervisor.stop() } catch { /* ignore */ }
+  process.exit(0)
+}
+process.once('SIGTERM', shutdown)
+process.once('SIGINT', shutdown)
+
 if (nicConfig?.configured === true) {
   console.log('Already configured — starting services.')
   const apiServer = await maybeInitAPI(nicConfig)
   const apiRemoteUrl = buildRemoteUrl(nicConfig)
-  await startServer({ configDir, tls, host, port, nicConfig, apiServer, apiRemoteUrl })
+  await startServer({ configDir, tls, host, port, nicConfig, apiServer, apiRemoteUrl, supervisor })
+  try {
+    await supervisor.start(nicConfig)
+  }
+  catch (err) {
+    console.error(`Supervisor start failed: ${err.message}`)
+  }
 } else {
   // ---------------------------------------------------------------------------
   // Pre-select a random port to suggest for the API in the configuration form
@@ -113,11 +129,19 @@ if (nicConfig?.configured === true) {
     host,
     port,
     nicConfig,
+    supervisor,
     suggestedPorts: { api: suggestedApiPort },
     onSaved: async (config, ctx) => {
       if (!ctx.apiServer && !ctx.apiRemoteUrl) {
         ctx.apiServer = await maybeInitAPI(config)
         ctx.apiRemoteUrl = buildRemoteUrl(config)
+      }
+      if (ctx.supervisor) {
+        // Restart nameserver engines with the freshly saved config.
+        try { await ctx.supervisor.stop() } catch { /* ignore */ }
+        try { await ctx.supervisor.start(config) } catch (err) {
+          console.error(`Supervisor start failed: ${err.message}`)
+        }
       }
     },
   })
@@ -144,19 +168,13 @@ async function discoverTLS(dir, hostname) {
         console.log(`Using TLS from ${file}`)
         return { ...parsed, hostname: certHost }
       }
-    } catch {
+      else {
+        console.warn(`missing valid PEM blocks in ${file}, skipping`)
+      }
+    } catch (e) {
+      if (e.code !== 'ENOENT') console.error(e.message)
       /* not found — try next */
     }
-  }
-
-  // Legacy: separate cert.pem + key.pem — CN unknown, present as localhost
-  try {
-    const cert = await fs.readFile(path.join(dir, 'cert.pem'), 'utf8')
-    const key = await fs.readFile(path.join(dir, 'key.pem'), 'utf8')
-    console.log(`Using TLS from ${dir}/cert.pem + key.pem`)
-    return { cert, key, hostname: 'localhost' }
-  } catch {
-    /* not found */
   }
 
   return null

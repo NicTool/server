@@ -9,15 +9,18 @@
     "nt-powerdns": "bin/nt_powerdns.js"
   },
   "scripts": {
-    "build": "",
-    "clean": "rm -rf coverage node_modules package-lock.json",
+    "build": "npm run web:build",
+    "web:build": "vite build",
+    "web:watch": "vite build --watch",
+    "test:e2e": "playwright test",
+    "clean": "rm -rf coverage node_modules package-lock.json html/dist",
     "format:check": "npm run prettier; npm run lint",
     "format": "npm run prettier -- --write && npm run lint:fix",
     "lint": "npx eslint **/*.js",
     "lint:fix": "npm run lint -- --fix",
     "prettier": "npx prettier --ignore-path .gitignore --check .",
     "prettier:fix": "npx prettier --ignore-path .gitignore --write .",
-    "server": "node bin/start.js -c ./data",
+    "server": "npm run build && node bin/start.js -c ./data",
     "server:watch": "node --watch bin/start.js -c ./data",
     "test": "node --test",
     "test:coverage": "node --test --experimental-test-coverage",
@@ -48,13 +51,19 @@
     "@nictool/dns-nameserver": "file:../dns-nameserver",
     "@nictool/dns-resource-record": "file:../dns-resource-record",
     "@nictool/dns-zone": "file:../dns-zone",
-    "joi": "^18.1.2",
-    "mysql2": "^3.0.0",
-    "smol-toml": "^1.6.1"
+    "joi": "^18.2.3",
+    "mysql2": "^3.23.1",
+    "smol-toml": "^1.7.0"
   },
   "prettier": {
     "printWidth": 90,
     "singleQuote": true,
     "semi": false
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "jsdom": "^29.1.1",
+    "lit": "^3.3.3",
+    "vite": "^8.1.5"
   }
 }

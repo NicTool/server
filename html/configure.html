@@ -1,860 +1,1525 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NicTool Setup</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>NicTool Setup</title>
+        <style>
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
 
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      font-size: 14px;
-      color: #1f2328;
-      background: #f6f8fa;
-      min-height: 100vh;
-      padding: 2rem 1rem;
-    }
+            body {
+                font-family:
+                    system-ui,
+                    -apple-system,
+                    sans-serif;
+                font-size: 14px;
+                color: #1f2328;
+                background: #f6f8fa;
+                min-height: 100vh;
+                padding: 2rem 1rem;
+            }
 
-    .page { max-width: 860px; margin: 0 auto; }
+            .page {
+                max-width: 860px;
+                margin: 0 auto;
+            }
 
-    h1 {
-      font-size: 1.4rem;
-      font-weight: 600;
-      margin-bottom: 1.5rem;
-      color: #1f2328;
-    }
+            h1 {
+                font-size: 1.4rem;
+                font-weight: 600;
+                margin-bottom: 1.5rem;
+                color: #1f2328;
+            }
 
-    /* ---- section card ---- */
-    .card {
-      background: #fff;
-      border: 1px solid #d0d7de;
-      border-radius: 6px;
-      margin-bottom: 1rem;
-    }
+            /* ---- section card ---- */
+            .card {
+                background: #fff;
+                border: 1px solid #d0d7de;
+                border-radius: 6px;
+                margin-bottom: 1rem;
+            }
 
-    .card-header {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.6rem 1rem;
-      border-bottom: 1px solid #d0d7de;
-      background: #f6f8fa;
-      border-radius: 6px 6px 0 0;
-    }
+            .card-header {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.6rem 1rem;
+                border-bottom: 1px solid #d0d7de;
+                background: #f6f8fa;
+                border-radius: 6px 6px 0 0;
+            }
 
-    .card-header h2 {
-      font-size: 0.875rem;
-      font-weight: 600;
-      flex: 1;
-    }
+            .card-header h2 {
+                font-size: 0.875rem;
+                font-weight: 600;
+                flex: 1;
+            }
 
-    .card-body { padding: 1rem; }
+            .card-body {
+                padding: 1rem;
+            }
 
-    /* ---- field rows ---- */
-    .fields {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem 1.5rem;
-      align-items: flex-end;
-    }
+            /* ---- field rows ---- */
+            .fields {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.75rem 1.5rem;
+                align-items: flex-end;
+            }
 
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      min-width: 140px;
-    }
+            .field {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                min-width: 140px;
+            }
 
-    .field.wide { flex: 1 1 240px; }
-    .field.narrow { width: 100px; flex: 0 0 100px; }
-    .field.full { flex: 1 1 100%; }
+            .field.wide {
+                flex: 1 1 240px;
+            }
+            .field.narrow {
+                width: 100px;
+                flex: 0 0 100px;
+            }
+            .field.full {
+                flex: 1 1 100%;
+            }
 
-    label {
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: #57606a;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
+            label {
+                font-size: 0.75rem;
+                font-weight: 600;
+                color: #57606a;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+            }
 
-    input[type="text"],
-    input[type="number"],
-    input[type="password"],
-    select {
-      height: 30px;
-      padding: 0 8px;
-      border: 1px solid #d0d7de;
-      border-radius: 6px;
-      font-size: 0.875rem;
-      font-family: inherit;
-      background: #fff;
-      color: #1f2328;
-      width: 100%;
-      transition: border-color 0.1s, box-shadow 0.1s;
-    }
+            input[type='text'],
+            input[type='number'],
+            input[type='password'],
+            select {
+                height: 30px;
+                padding: 0 8px;
+                border: 1px solid #d0d7de;
+                border-radius: 6px;
+                font-size: 0.875rem;
+                font-family: inherit;
+                background: #fff;
+                color: #1f2328;
+                width: 100%;
+                transition:
+                    border-color 0.1s,
+                    box-shadow 0.1s;
+            }
 
-    input:focus, select:focus {
-      outline: none;
-      border-color: #0969da;
-      box-shadow: 0 0 0 3px rgba(9,105,218,0.12);
-    }
+            input:focus,
+            select:focus {
+                outline: none;
+                border-color: #0969da;
+                box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.12);
+            }
 
-    input.valid   { border-color: #1a7f37; }
-    input.invalid { border-color: #cf222e; background: #fff8f8; }
-    select.valid  { border-color: #1a7f37; }
-    select.invalid{ border-color: #cf222e; background: #fff8f8; }
+            input.valid {
+                border-color: #1a7f37;
+            }
+            input.invalid {
+                border-color: #cf222e;
+                background: #fff8f8;
+            }
+            select.valid {
+                border-color: #1a7f37;
+            }
+            select.invalid {
+                border-color: #cf222e;
+                background: #fff8f8;
+            }
 
-    .field-note {
-      font-size: 0.7rem;
-      color: #57606a;
-      min-height: 1em;
-    }
-    .field-note.err { color: #cf222e; }
-    .field-note.ok  { color: #1a7f37; }
+            .field-note {
+                font-size: 0.7rem;
+                color: #57606a;
+                min-height: 1em;
+            }
+            .field-note.err {
+                color: #cf222e;
+            }
+            .field-note.ok {
+                color: #1a7f37;
+            }
 
-    /* ---- section validity badge ---- */
-    .badge {
-      font-size: 0.7rem;
-      padding: 1px 6px;
-      border-radius: 10px;
-      font-weight: 600;
-    }
-    .badge.ok  { background: #dafbe1; color: #1a7f37; }
-    .badge.err { background: #ffebe9; color: #cf222e; }
-    .badge.pending { background: #eef0f2; color: #57606a; }
+            /* ---- section validity badge ---- */
+            .badge {
+                font-size: 0.7rem;
+                padding: 1px 6px;
+                border-radius: 10px;
+                font-weight: 600;
+            }
+            .badge.ok {
+                background: #dafbe1;
+                color: #1a7f37;
+            }
+            .badge.err {
+                background: #ffebe9;
+                color: #cf222e;
+            }
+            .badge.pending {
+                background: #eef0f2;
+                color: #57606a;
+            }
 
-    /* ---- separator between store sub-sections ---- */
-    .db-sep {
-      width: 100%;
-      border: none;
-      border-top: 1px dashed #d0d7de;
-      margin: 0.75rem 0 0.25rem;
-    }
+            /* ---- separator between store sub-sections ---- */
+            .db-sep {
+                width: 100%;
+                border: none;
+                border-top: 1px dashed #d0d7de;
+                margin: 0.75rem 0 0.25rem;
+            }
 
-    /* ---- nameserver table ---- */
-    .ns-grid {
-      width: 100%;
-      border-collapse: collapse;
-    }
+            /* ---- nameserver table ---- */
+            .ns-grid {
+                width: 100%;
+                border-collapse: collapse;
+            }
 
-    .ns-grid th {
-      text-align: left;
-      font-size: 0.7rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      color: #57606a;
-      padding: 0 6px 6px;
-    }
+            .ns-grid th {
+                text-align: left;
+                font-size: 0.7rem;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+                color: #57606a;
+                padding: 0 6px 6px;
+            }
 
-    .ns-grid td {
-      padding: 3px 6px;
-      vertical-align: middle;
-    }
+            .ns-grid td {
+                padding: 3px 6px;
+                vertical-align: middle;
+            }
 
-    .ns-grid td:last-child { padding-right: 0; width: 28px; }
+            .ns-grid td:last-child {
+                padding-right: 0;
+                width: 28px;
+            }
 
-    .ns-grid input,
-    .ns-grid select { height: 28px; font-size: 0.8rem; }
+            .ns-grid input,
+            .ns-grid select {
+                height: 28px;
+                font-size: 0.8rem;
+            }
 
-    .ns-grid tr.ns-row:not(:first-child) td { padding-top: 4px; }
+            .ns-grid tr.ns-row:not(:first-child) > td {
+                padding-top: 4px;
+            }
 
-    /* ---- buttons ---- */
-    .btn-add {
-      margin-top: 0.75rem;
-      padding: 4px 10px;
-      font-size: 0.8rem;
-      font-family: inherit;
-      border: 1px dashed #d0d7de;
-      border-radius: 6px;
-      background: none;
-      cursor: pointer;
-      color: #0969da;
-    }
-    .btn-add:hover { background: #f0f7ff; border-color: #0969da; }
+            .ns-expand {
+                background: #f6f8fa;
+                border: 1px solid #d0d7de;
+                border-radius: 6px;
+                padding: 10px 12px;
+                margin: 4px 6px 10px;
+                display: none;
+            }
+            .ns-expand.open {
+                display: block;
+            }
+            .ns-expand h3 {
+                font-size: 0.72rem;
+                font-weight: 600;
+                color: #57606a;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+                margin: 6px 0 4px;
+            }
+            .ns-expand .fields {
+                gap: 0.5rem 1rem;
+            }
 
-    .btn-remove {
-      background: none;
-      border: none;
-      cursor: pointer;
-      color: #8c959f;
-      font-size: 1rem;
-      line-height: 1;
-      padding: 2px 4px;
-      border-radius: 4px;
-    }
-    .btn-remove:hover { background: #ffebe9; color: #cf222e; }
+            .listen-grid {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 4px;
+            }
+            .listen-grid th {
+                padding: 0 4px 2px;
+                font-size: 0.65rem;
+                color: #57606a;
+                text-align: left;
+            }
+            .listen-grid td {
+                padding: 2px 4px;
+            }
+            .listen-grid input,
+            .listen-grid select {
+                height: 26px;
+                font-size: 0.78rem;
+            }
+            .listen-grid td:last-child {
+                width: 24px;
+                padding-right: 0;
+            }
 
-    .btn-save {
-      padding: 6px 20px;
-      font-size: 0.9rem;
-      font-family: inherit;
-      font-weight: 500;
-      background: #1f883d;
-      color: #fff;
-      border: 1px solid rgba(31,35,40,0.15);
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    .btn-save:disabled { background: #8c959f; cursor: not-allowed; }
-    .btn-save:not(:disabled):hover { background: #1a7f37; }
+            .btn-add-inline {
+                padding: 2px 8px;
+                font-size: 0.72rem;
+                border: 1px dashed #d0d7de;
+                border-radius: 4px;
+                background: none;
+                cursor: pointer;
+                color: #0969da;
+            }
 
-    /* ---- save bar ---- */
-    .save-bar {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      padding: 1rem 0 0.5rem;
-    }
+            .btn-expand {
+                background: none;
+                border: 1px solid #d0d7de;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 0.75rem;
+                color: #57606a;
+                padding: 2px 6px;
+            }
+            .btn-expand.open {
+                background: #ddf4ff;
+                color: #0969da;
+                border-color: #0969da;
+            }
 
-    #save-msg {
-      font-size: 0.875rem;
-    }
-    #save-msg.ok  { color: #1a7f37; }
-    #save-msg.err { color: #cf222e; }
-  </style>
-</head>
-<body>
-<div class="page">
-  <h1>NicTool Configurator</h1>
+            /* ---- buttons ---- */
+            .btn-add {
+                margin-top: 0.75rem;
+                padding: 4px 10px;
+                font-size: 0.8rem;
+                font-family: inherit;
+                border: 1px dashed #d0d7de;
+                border-radius: 6px;
+                background: none;
+                cursor: pointer;
+                color: #0969da;
+            }
+            .btn-add:hover {
+                background: #f0f7ff;
+                border-color: #0969da;
+            }
 
-  <form id="cfg" novalidate>
+            .btn-remove {
+                background: none;
+                border: none;
+                cursor: pointer;
+                color: #8c959f;
+                font-size: 1rem;
+                line-height: 1;
+                padding: 2px 4px;
+                border-radius: 4px;
+            }
+            .btn-remove:hover {
+                background: #ffebe9;
+                color: #cf222e;
+            }
 
-    <!-- ===== Data Store ===== -->
-    <div class="card">
-      <div class="card-header">
-        <h2>Data Store</h2>
-        <span class="badge pending" id="b-store">—</span>
-      </div>
-      <div class="card-body">
-        <div class="fields">
-          <div class="field narrow">
-            <label for="store-type">Type</label>
-            <select id="store-type" name="store.type">
-              <option value="directory">directory</option>
-              <option value="mysql">mysql</option>
-              <option value="mongodb" disabled>mongodb (coming soon)</option>
-              <option value="elasticsearch" disabled>elasticsearch (coming soon)</option>
-            </select>
-          </div>
-          <!-- directory: single path field -->
-          <div class="field wide" id="f-store-path">
-            <label for="store-path">Path</label>
-            <input type="text" id="store-path" name="store.path" placeholder="./data/zones" autocomplete="off">
-            <span class="field-note" id="n-store-path"></span>
-          </div>
+            .btn-save {
+                padding: 6px 20px;
+                font-size: 0.9rem;
+                font-family: inherit;
+                font-weight: 500;
+                background: #1f883d;
+                color: #fff;
+                border: 1px solid rgba(31, 35, 40, 0.15);
+                border-radius: 6px;
+                cursor: pointer;
+            }
+            .btn-save:disabled {
+                background: #8c959f;
+                cursor: not-allowed;
+            }
+            .btn-save:not(:disabled):hover {
+                background: #1a7f37;
+            }
+
+            /* ---- save bar ---- */
+            .save-bar {
+                display: flex;
+                align-items: center;
+                gap: 1rem;
+                padding: 1rem 0 0.5rem;
+            }
+
+            #save-msg {
+                font-size: 0.875rem;
+            }
+            #save-msg.ok {
+                color: #1a7f37;
+            }
+            #save-msg.err {
+                color: #cf222e;
+            }
+        </style>
+        <script type="module" src="/dist/nictool-web.js"></script>
+    </head>
+    <body>
+        <div class="page">
+            <h1>NicTool Configurator</h1>
+
+            <form id="cfg" novalidate>
+                <!-- ===== Data Store ===== -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Data Store</h2>
+                        <span class="badge pending" id="b-store">—</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="fields">
+                            <div class="field narrow">
+                                <label for="store-type">Type</label>
+                                <select id="store-type" name="store.type">
+                                    <option value="directory">directory</option>
+                                    <option value="mysql">mysql</option>
+                                    <option value="mongodb" disabled>
+                                        mongodb (coming soon)
+                                    </option>
+                                    <option value="elasticsearch" disabled>
+                                        elasticsearch (coming soon)
+                                    </option>
+                                </select>
+                            </div>
+                            <!-- directory: single path field -->
+                            <div class="field wide" id="f-store-path">
+                                <label for="store-path">Path</label>
+                                <input
+                                    type="text"
+                                    id="store-path"
+                                    name="store.path"
+                                    placeholder="./data"
+                                    autocomplete="off"
+                                />
+                                <span class="field-note" id="n-store-path"></span>
+                            </div>
+                        </div>
+
+                        <!-- database: DSN + individual fields -->
+                        <div id="f-store-db" style="display: none">
+                            <div class="fields" style="margin-top: 0.75rem">
+                                <div class="field full">
+                                    <label for="db-dsn">DSN</label>
+                                    <input
+                                        type="text"
+                                        id="db-dsn"
+                                        placeholder="mysql://user:password@127.0.0.1:3306/nictool"
+                                        autocomplete="off"
+                                    />
+                                    <span class="field-note" id="n-db-dsn"></span>
+                                    <nt-dsn-status id="dsn-status"></nt-dsn-status>
+                                </div>
+                            </div>
+                            <hr class="db-sep" />
+                            <div class="fields">
+                                <div class="field wide">
+                                    <label for="db-host">Host</label>
+                                    <input
+                                        type="text"
+                                        id="db-host"
+                                        placeholder="127.0.0.1"
+                                        autocomplete="off"
+                                    />
+                                </div>
+                                <div class="field narrow">
+                                    <label for="db-port">Port</label>
+                                    <input
+                                        type="number"
+                                        id="db-port"
+                                        min="1"
+                                        max="65535"
+                                        placeholder="3306"
+                                    />
+                                </div>
+                                <div class="field wide">
+                                    <label for="db-user">User</label>
+                                    <input
+                                        type="text"
+                                        id="db-user"
+                                        placeholder="nictool"
+                                        autocomplete="off"
+                                    />
+                                </div>
+                                <div class="field wide">
+                                    <label for="db-password">Password</label>
+                                    <input
+                                        type="password"
+                                        id="db-password"
+                                        autocomplete="new-password"
+                                    />
+                                </div>
+                                <div class="field wide">
+                                    <label for="db-name">Database</label>
+                                    <input
+                                        type="text"
+                                        id="db-name"
+                                        placeholder="nictool"
+                                        autocomplete="off"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ===== API Service ===== -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>API Service</h2>
+                        <span class="badge pending" id="b-api">—</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="fields">
+                            <div class="field narrow">
+                                <label for="api-mode">Mode</label>
+                                <select id="api-mode" name="api.mode">
+                                    <option value="local">local</option>
+                                    <option value="remote">remote</option>
+                                </select>
+                                <span class="field-note">How the API is reached</span>
+                            </div>
+                        </div>
+                        <div
+                            id="api-remote-fields"
+                            style="display: none; margin-top: 0.75rem"
+                        >
+                            <div class="fields">
+                                <div class="field wide">
+                                    <label for="api-host">Host</label>
+                                    <input
+                                        type="text"
+                                        id="api-host"
+                                        name="api.host"
+                                        placeholder="api.example.com"
+                                        autocomplete="off"
+                                    />
+                                    <span class="field-note" id="n-api-host"></span>
+                                </div>
+                                <div class="field narrow">
+                                    <label for="api-port">Port</label>
+                                    <input
+                                        type="number"
+                                        id="api-port"
+                                        name="api.port"
+                                        min="1"
+                                        max="65535"
+                                    />
+                                    <span class="field-note" id="n-api-port"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ===== Nameservers ===== -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Nameservers</h2>
+                        <span class="badge pending" id="b-ns">—</span>
+                    </div>
+                    <div class="card-body">
+                        <table class="ns-grid">
+                            <thead>
+                                <tr>
+                                    <th style="min-width: 200px">Name</th>
+                                    <th style="width: 120px">Engine</th>
+                                    <th style="width: 120px">Transport</th>
+                                    <th style="width: 40px"></th>
+                                    <th style="width: 28px"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="ns-body"></tbody>
+                        </table>
+                        <button type="button" class="btn-add" id="btn-add-ns">
+                            + Add nameserver
+                        </button>
+                    </div>
+                </div>
+
+                <div class="save-bar">
+                    <button type="submit" class="btn-save" id="btn-save" disabled>
+                        Save Configuration
+                    </button>
+                    <span id="save-msg"></span>
+                </div>
+            </form>
         </div>
 
-        <!-- database: DSN + individual fields -->
-        <div id="f-store-db" style="display:none">
-          <div class="fields" style="margin-top:0.75rem">
-            <div class="field full">
-              <label for="db-dsn">DSN</label>
-              <input type="text" id="db-dsn" placeholder="mysql://user:password@127.0.0.1:3306/nictool" autocomplete="off">
-              <span class="field-note" id="n-db-dsn"></span>
-            </div>
-          </div>
-          <hr class="db-sep">
-          <div class="fields">
-            <div class="field wide">
-              <label for="db-host">Host</label>
-              <input type="text" id="db-host" placeholder="127.0.0.1" autocomplete="off">
-            </div>
-            <div class="field narrow">
-              <label for="db-port">Port</label>
-              <input type="number" id="db-port" min="1" max="65535" placeholder="3306">
-            </div>
-            <div class="field wide">
-              <label for="db-user">User</label>
-              <input type="text" id="db-user" placeholder="nictool" autocomplete="off">
-            </div>
-            <div class="field wide">
-              <label for="db-password">Password</label>
-              <input type="password" id="db-password" autocomplete="new-password">
-            </div>
-            <div class="field wide">
-              <label for="db-name">Database</label>
-              <input type="text" id="db-name" placeholder="nictool" autocomplete="off">
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+        <script>
+            'use strict'
 
-    <!-- ===== API Service ===== -->
-    <div class="card">
-      <div class="card-header">
-        <h2>API Service</h2>
-        <span class="badge pending" id="b-api">—</span>
-      </div>
-      <div class="card-body">
-        <div class="fields">
-          <div class="field narrow">
-            <label for="api-mode">Mode</label>
-            <select id="api-mode" name="api.mode">
-              <option value="local">local</option>
-              <option value="remote">remote</option>
-            </select>
-            <span class="field-note">How the API is reached</span>
-          </div>
-        </div>
-        <div id="api-remote-fields" style="display:none; margin-top:0.75rem">
-          <div class="fields">
-            <div class="field wide">
-              <label for="api-host">Host</label>
-              <input type="text" id="api-host" name="api.host" placeholder="api.example.com" autocomplete="off">
-              <span class="field-note" id="n-api-host"></span>
-            </div>
-            <div class="field narrow">
-              <label for="api-port">Port</label>
-              <input type="number" id="api-port" name="api.port" min="1" max="65535">
-              <span class="field-note" id="n-api-port"></span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+            let _rowSeq = 0
+            let _serverHostname = ''
 
-    <!-- ===== Nameservers ===== -->
-    <div class="card">
-      <div class="card-header">
-        <h2>Nameservers</h2>
-        <span class="badge pending" id="b-ns">—</span>
-      </div>
-      <div class="card-body">
-        <table class="ns-grid">
-          <thead>
-            <tr>
-              <th style="min-width:160px">Host</th>
-              <th style="width:80px">Port</th>
-              <th style="width:110px">Type</th>
-              <th style="width:110px" id="th-export">Export Type</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="ns-body"></tbody>
+            // -------------------------------------------------------------------------
+            // Validation helpers
+            // -------------------------------------------------------------------------
+
+            function isValidHost(v) {
+                return typeof v === 'string' && v.trim().length > 0
+            }
+
+            function isValidPort(v) {
+                const n = Number(v)
+                return Number.isInteger(n) && n >= 1 && n <= 65535
+            }
+
+            function setField(inputId, noteId, ok, msg) {
+                const el = document.getElementById(inputId)
+                const note = document.getElementById(noteId)
+                if (el) {
+                    el.classList.toggle('valid', ok)
+                    el.classList.toggle('invalid', !ok)
+                }
+                if (note) {
+                    note.textContent = msg || ''
+                    note.className = 'field-note' + (ok ? ' ok' : msg ? ' err' : '')
+                }
+            }
+
+            function setBadge(id, ok, pending) {
+                const el = document.getElementById(id)
+                if (!el) return
+                if (pending) {
+                    el.textContent = '—'
+                    el.className = 'badge pending'
+                    return
+                }
+                el.textContent = ok ? '✓' : '✗'
+                el.className = 'badge ' + (ok ? 'ok' : 'err')
+            }
+
+            // -------------------------------------------------------------------------
+            // DSN helpers (bidirectional)
+            // -------------------------------------------------------------------------
+
+            function dsnFromFields() {
+                const host = document.getElementById('db-host').value.trim()
+                const port = document.getElementById('db-port').value.trim()
+                const user = document.getElementById('db-user').value.trim()
+                const pass = document.getElementById('db-password').value
+                const name = document.getElementById('db-name').value.trim()
+                if (!host && !user && !name) return ''
+                const userPart = user
+                    ? pass
+                        ? `${encodeURIComponent(user)}:${encodeURIComponent(pass)}@`
+                        : `${encodeURIComponent(user)}@`
+                    : ''
+                const portPart = port ? `:${port}` : ''
+                return `mysql://${userPart}${host || '127.0.0.1'}${portPart}/${name}`
+            }
+
+            function fieldsFromDsn(dsn) {
+                try {
+                    const u = new URL(dsn)
+                    if (u.protocol !== 'mysql:') return false
+                    document.getElementById('db-host').value = u.hostname
+                    document.getElementById('db-port').value = u.port || '3306'
+                    document.getElementById('db-user').value = decodeURIComponent(
+                        u.username,
+                    )
+                    document.getElementById('db-password').value = decodeURIComponent(
+                        u.password,
+                    )
+                    document.getElementById('db-name').value = u.pathname.replace(
+                        /^\//,
+                        '',
+                    )
+                    return true
+                } catch {
+                    return false
+                }
+            }
+
+            // Hand the current DSN to the live connectivity indicator. The
+            // component debounces and probes the server itself.
+            function updateDsnStatus(dsn) {
+                const el = document.getElementById('dsn-status')
+                if (el) el.dsn = dsn || ''
+            }
+
+            function onDbFieldChange() {
+                const dsn = dsnFromFields()
+                const el = document.getElementById('db-dsn')
+                el.value = dsn
+                // Don't mark DSN valid/invalid while the user is still filling fields
+                el.classList.remove('valid', 'invalid')
+                document.getElementById('n-db-dsn').textContent = ''
+                updateDsnStatus(dsn)
+                validateStore()
+                validateAll()
+            }
+
+            function onDsnChange() {
+                const dsn = document.getElementById('db-dsn').value.trim()
+                updateDsnStatus(dsn)
+                if (!dsn) {
+                    setField('db-dsn', 'n-db-dsn', false, 'Required')
+                } else if (fieldsFromDsn(dsn)) {
+                    setField('db-dsn', 'n-db-dsn', true, '')
+                } else {
+                    setField(
+                        'db-dsn',
+                        'n-db-dsn',
+                        false,
+                        'Expected mysql://user:pass@host:port/db',
+                    )
+                }
+                validateStore()
+                validateAll()
+            }
+
+            function validateDbFields() {
+                const host = document.getElementById('db-host').value.trim()
+                const port = document.getElementById('db-port').value.trim()
+                const user = document.getElementById('db-user').value.trim()
+                const name = document.getElementById('db-name').value.trim()
+                return (
+                    host.length > 0 &&
+                    isValidPort(port) &&
+                    user.length > 0 &&
+                    name.length > 0
+                )
+            }
+
+            // -------------------------------------------------------------------------
+            // Section validators — return true if section is valid
+            // -------------------------------------------------------------------------
+
+            // Tracks the server-side path check result: null=pending, true=ok, false=fail
+            let _pathCheckOk = null
+            let _pathCheckTimer = null
+
+            function validateStore() {
+                const type = document.getElementById('store-type').value
+                const isDir = type === 'directory'
+                document.getElementById('f-store-path').style.display = isDir
+                    ? ''
+                    : 'none'
+                document.getElementById('f-store-db').style.display = isDir ? 'none' : ''
+
+                let ok
+                if (isDir) {
+                    const pathEl = document.getElementById('store-path')
+                    if (pathEl.value.trim().length === 0) {
+                        setField('store-path', 'n-store-path', false, 'Path is required')
+                    }
+                    ok = _pathCheckOk === true
+                } else {
+                    ok = validateDbFields()
+                }
+
+                setBadge('b-store', ok, false)
+                return ok
+            }
+
+            function checkStorePath() {
+                const type = document.getElementById('store-type').value
+                if (type !== 'directory') return
+
+                const val = document.getElementById('store-path').value.trim()
+                if (!val) {
+                    _pathCheckOk = false
+                    setField('store-path', 'n-store-path', false, 'Path is required')
+                    validateAll()
+                    return
+                }
+
+                // debounce
+                clearTimeout(_pathCheckTimer)
+                document.getElementById('n-store-path').textContent = '…'
+                document.getElementById('n-store-path').className = 'field-note'
+                _pathCheckOk = null
+
+                _pathCheckTimer = setTimeout(async () => {
+                    try {
+                        const res = await fetch(
+                            '/nt/check-path?path=' + encodeURIComponent(val),
+                        )
+                        const data = await res.json()
+                        _pathCheckOk = data.ok
+                        const msg = data.ok
+                            ? data.exists
+                                ? 'Directory exists'
+                                : 'Will be created'
+                            : data.error || 'Invalid path'
+                        setField(
+                            'store-path',
+                            'n-store-path',
+                            data.ok,
+                            data.ok ? '' : msg,
+                        )
+                        if (data.ok) {
+                            document.getElementById('n-store-path').textContent = msg
+                            if (data.resolved)
+                                document.getElementById('store-path').value =
+                                    data.resolved
+                        }
+                    } catch {
+                        _pathCheckOk = false
+                        setField(
+                            'store-path',
+                            'n-store-path',
+                            false,
+                            'Could not verify path',
+                        )
+                    }
+                    validateAll()
+                }, 400)
+            }
+
+            function validateAPI() {
+                const mode = document.getElementById('api-mode').value
+                const isRemote = mode === 'remote'
+                document.getElementById('api-remote-fields').style.display = isRemote
+                    ? ''
+                    : 'none'
+
+                if (!isRemote) {
+                    setBadge('b-api', true, false)
+                    return true
+                }
+
+                const hostOk = isValidHost(document.getElementById('api-host').value)
+                const portOk = isValidPort(document.getElementById('api-port').value)
+
+                setField('api-host', 'n-api-host', hostOk, hostOk ? '' : 'Required')
+                setField('api-port', 'n-api-port', portOk, portOk ? '' : '1 – 65535')
+
+                const ok = hostOk && portOk
+                setBadge('b-api', ok, false)
+                return ok
+            }
+
+            const ENGINE_OPTIONS = [
+                'native',
+                'bind',
+                'knot',
+                'nsd',
+                'powerdns',
+                'tinydns',
+                'maradns',
+            ]
+            const PUBLISHER_BY_ENGINE = {
+                native: 'memory',
+                bind: 'rfc1035',
+                knot: 'rfc1035',
+                nsd: 'rfc1035',
+                powerdns: 'rfc1035',
+                tinydns: 'tinydns-cdb',
+                maradns: 'rfc1035',
+            }
+            const TRANSPORT_OPTIONS = ['noop', 'axfr', 'rsync', 'db-replication']
+            const DNSSEC_ALGOS = [
+                'RSASHA256',
+                'RSASHA512',
+                'ECDSAP256SHA256',
+                'ECDSAP384SHA384',
+                'ED25519',
+                'ED448',
+            ]
+
+            function isValidName(v) {
+                return typeof v === 'string' && v.trim().length > 0
+            }
+
+            function validateNsRow(id) {
+                const nameEl = document.getElementById('ns-name-' + id)
+                const engineEl = document.getElementById('ns-engine-' + id)
+                const transportEl = document.getElementById('ns-transport-type-' + id)
+
+                if (!nameEl) return true // row removed
+
+                const nameOk = isValidName(nameEl.value)
+                nameEl.classList.toggle('valid', nameOk)
+                nameEl.classList.toggle('invalid', !nameOk)
+
+                // Engine=native requires at least one listen row with valid address+port.
+                let listenOk = true
+                if (engineEl.value === 'native') {
+                    const listenRows = document.querySelectorAll(
+                        `#ns-listen-body-${id} tr.listen-row`,
+                    )
+                    if (listenRows.length === 0) listenOk = false
+                    for (const row of listenRows) {
+                        const a = row.querySelector('.listen-address').value.trim()
+                        const p = row.querySelector('.listen-port').value.trim()
+                        if (!a || !isValidPort(p)) {
+                            listenOk = false
+                            break
+                        }
+                    }
+                }
+
+                // Publisher path required for file-based engines.
+                let publisherOk = true
+                if (engineEl.value !== 'native') {
+                    const pathEl = document.getElementById('ns-publisher-path-' + id)
+                    if (!pathEl || pathEl.value.trim().length === 0) publisherOk = false
+                }
+
+                // Transport type must be selected (always is via default).
+                const transportOk = TRANSPORT_OPTIONS.includes(transportEl.value)
+
+                return nameOk && listenOk && publisherOk && transportOk
+            }
+
+            function validateNS() {
+                const rows = document.querySelectorAll('#ns-body tr.ns-row')
+                if (rows.length === 0) {
+                    setBadge('b-ns', false, false)
+                    return false
+                }
+
+                let ok = true
+                for (const row of rows) {
+                    if (!validateNsRow(Number(row.dataset.id))) ok = false
+                }
+                setBadge('b-ns', ok, false)
+                return ok
+            }
+
+            function validateAll() {
+                const s = validateStore()
+                const a = validateAPI()
+                validateNS()
+                // Only Store + API required to enable Save
+                document.getElementById('btn-save').disabled = !(s && a)
+                return s && a
+            }
+
+            // -------------------------------------------------------------------------
+            // Nameserver rows
+            // -------------------------------------------------------------------------
+
+            // Normalize a config row from the old shape {host, port, type, exportType}
+            // into the richer shape used by the UI + supervisor.
+            function migrateLegacyNs(ns) {
+                if (!ns) return {}
+                if (ns.engine) return ns // already new shape
+                const out = { ...ns }
+                if (ns.type === 'native' || !ns.type) {
+                    out.engine = 'native'
+                    if (ns.host && ns.port) {
+                        out.listen = [
+                            { address: ns.host, port: Number(ns.port), proto: 'udp' },
+                        ]
+                    }
+                } else {
+                    // Legacy "export" NS — default to bind so user can refine.
+                    out.engine = 'bind'
+                    out.publisher = { type: 'rfc1035', path: ns.path || '' }
+                    out.transport = {
+                        type:
+                            ns.exportType === 'database'
+                                ? 'db-replication'
+                                : ns.exportType || 'rsync',
+                        interval: 300,
+                        cooldown: 5,
+                    }
+                }
+                return out
+            }
+
+            function addNsRow(nsIn) {
+                const ns = migrateLegacyNs(nsIn)
+                const id = _rowSeq++
+
+                const defaultName = ns.name || `ns${id + 1}.example.com.`
+                const defaultEngine = ns.engine || 'native'
+                const defaultTransport =
+                    ns.transport?.type || (defaultEngine === 'native' ? 'noop' : 'rsync')
+                const defaultInterval =
+                    ns.transport?.interval ?? (defaultEngine === 'native' ? 0 : 300)
+                const defaultCooldown = ns.transport?.cooldown ?? 5
+                const defaultPublisherPath = ns.publisher?.path ?? ''
+
+                const tbody = document.getElementById('ns-body')
+
+                // --- primary row ---
+                const tr = document.createElement('tr')
+                tr.className = 'ns-row'
+                tr.dataset.id = id
+
+                // name cell
+                const tdName = document.createElement('td')
+                const inName = document.createElement('input')
+                inName.type = 'text'
+                inName.id = 'ns-name-' + id
+                inName.value = defaultName
+                inName.placeholder = 'ns1.example.com.'
+                inName.autocomplete = 'off'
+                inName.addEventListener('input', () => {
+                    validateNsRow(id)
+                    validateAll()
+                })
+                tdName.appendChild(inName)
+                tr.appendChild(tdName)
+
+                // engine cell
+                const tdEngine = document.createElement('td')
+                const selEngine = document.createElement('select')
+                selEngine.id = 'ns-engine-' + id
+                for (const val of ENGINE_OPTIONS) {
+                    const opt = document.createElement('option')
+                    opt.value = val
+                    opt.textContent = val
+                    if (defaultEngine === val) opt.selected = true
+                    selEngine.appendChild(opt)
+                }
+                selEngine.addEventListener('change', () => {
+                    onEngineChange(id)
+                    validateNsRow(id)
+                    validateAll()
+                })
+                tdEngine.appendChild(selEngine)
+                tr.appendChild(tdEngine)
+
+                // transport cell (top-level summary; details in expand panel)
+                const tdTransport = document.createElement('td')
+                const selTransport = document.createElement('select')
+                selTransport.id = 'ns-transport-type-' + id
+                for (const val of TRANSPORT_OPTIONS) {
+                    const opt = document.createElement('option')
+                    opt.value = val
+                    opt.textContent = val
+                    if (defaultTransport === val) opt.selected = true
+                    selTransport.appendChild(opt)
+                }
+                selTransport.addEventListener('change', () => {
+                    validateNsRow(id)
+                    validateAll()
+                })
+                tdTransport.appendChild(selTransport)
+                tr.appendChild(tdTransport)
+
+                // expand toggle cell
+                const tdExpand = document.createElement('td')
+                const btnExpand = document.createElement('button')
+                btnExpand.type = 'button'
+                btnExpand.className = 'btn-expand'
+                btnExpand.textContent = '▾'
+                btnExpand.title = 'Advanced'
+                btnExpand.addEventListener('click', () => {
+                    const panel = document.getElementById('ns-expand-' + id)
+                    const open = panel.classList.toggle('open')
+                    btnExpand.classList.toggle('open', open)
+                })
+                tdExpand.appendChild(btnExpand)
+                tr.appendChild(tdExpand)
+
+                // remove button cell
+                const tdRemove = document.createElement('td')
+                const btnRemove = document.createElement('button')
+                btnRemove.type = 'button'
+                btnRemove.className = 'btn-remove'
+                btnRemove.title = 'Remove'
+                btnRemove.innerHTML = '&times;'
+                btnRemove.addEventListener('click', () => {
+                    tr.remove()
+                    trExpand.remove()
+                    validateAll()
+                })
+                tdRemove.appendChild(btnRemove)
+                tr.appendChild(tdRemove)
+
+                tbody.appendChild(tr)
+
+                // --- expand row (full-width single cell containing the advanced panel) ---
+                const trExpand = document.createElement('tr')
+                trExpand.className = 'ns-expand-row'
+                const tdExpandCell = document.createElement('td')
+                tdExpandCell.colSpan = 5
+                tdExpandCell.style.padding = '0'
+
+                const panel = document.createElement('div')
+                panel.className = 'ns-expand'
+                panel.id = 'ns-expand-' + id
+                panel.innerHTML = renderExpandPanel(
+                    id,
+                    ns,
+                    defaultPublisherPath,
+                    defaultInterval,
+                    defaultCooldown,
+                )
+                tdExpandCell.appendChild(panel)
+                trExpand.appendChild(tdExpandCell)
+                tbody.appendChild(trExpand)
+
+                // Seed listen rows from config (default one row for native)
+                if (defaultEngine === 'native') {
+                    const listen =
+                        Array.isArray(ns.listen) && ns.listen.length
+                            ? ns.listen
+                            : [{ address: '127.0.0.1', port: 53, proto: 'udp' }]
+                    for (const l of listen) addListenRow(id, l)
+                }
+
+                wireExpandPanel(id)
+                onEngineChange(id)
+                validateNsRow(id)
+                validateAll()
+            }
+
+            function renderExpandPanel(id, ns, pubPath, interval, cooldown) {
+                const d = ns.dnssec || {}
+                const t = ns.transport || {}
+                return `
+      <div id="ns-native-${id}">
+        <h3>Listen</h3>
+        <table class="listen-grid">
+          <thead><tr>
+            <th>Address</th><th style="width:80px">Port</th><th style="width:70px">Proto</th><th></th>
+          </tr></thead>
+          <tbody id="ns-listen-body-${id}"></tbody>
         </table>
-        <button type="button" class="btn-add" id="btn-add-ns">+ Add nameserver</button>
+        <button type="button" class="btn-add-inline" id="ns-listen-add-${id}">+ Add listener</button>
       </div>
-    </div>
-
-    <div class="save-bar">
-      <button type="submit" class="btn-save" id="btn-save" disabled>Save Configuration</button>
-      <span id="save-msg"></span>
-    </div>
-
-  </form>
-</div>
-
-
-<script>
-  'use strict'
-
-  let _rowSeq = 0
-  let _serverHostname = ''
-
-  // -------------------------------------------------------------------------
-  // Validation helpers
-  // -------------------------------------------------------------------------
-
-  function isValidHost(v) {
-    return typeof v === 'string' && v.trim().length > 0
-  }
-
-  function isValidPort(v) {
-    const n = Number(v)
-    return Number.isInteger(n) && n >= 1 && n <= 65535
-  }
-
-  function setField(inputId, noteId, ok, msg) {
-    const el = document.getElementById(inputId)
-    const note = document.getElementById(noteId)
-    if (el) {
-      el.classList.toggle('valid', ok)
-      el.classList.toggle('invalid', !ok)
-    }
-    if (note) {
-      note.textContent = msg || ''
-      note.className = 'field-note' + (ok ? ' ok' : msg ? ' err' : '')
-    }
-  }
-
-  function setBadge(id, ok, pending) {
-    const el = document.getElementById(id)
-    if (!el) return
-    if (pending) { el.textContent = '—'; el.className = 'badge pending'; return }
-    el.textContent = ok ? '✓' : '✗'
-    el.className = 'badge ' + (ok ? 'ok' : 'err')
-  }
-
-  // -------------------------------------------------------------------------
-  // DSN helpers (bidirectional)
-  // -------------------------------------------------------------------------
-
-  function dsnFromFields() {
-    const host = document.getElementById('db-host').value.trim()
-    const port = document.getElementById('db-port').value.trim()
-    const user = document.getElementById('db-user').value.trim()
-    const pass = document.getElementById('db-password').value
-    const name = document.getElementById('db-name').value.trim()
-    if (!host && !user && !name) return ''
-    const userPart = user
-      ? (pass ? `${encodeURIComponent(user)}:${encodeURIComponent(pass)}@` : `${encodeURIComponent(user)}@`)
-      : ''
-    const portPart = port ? `:${port}` : ''
-    return `mysql://${userPart}${host || '127.0.0.1'}${portPart}/${name}`
-  }
-
-  function fieldsFromDsn(dsn) {
-    try {
-      const u = new URL(dsn)
-      if (u.protocol !== 'mysql:') return false
-      document.getElementById('db-host').value     = u.hostname
-      document.getElementById('db-port').value     = u.port || '3306'
-      document.getElementById('db-user').value     = decodeURIComponent(u.username)
-      document.getElementById('db-password').value = decodeURIComponent(u.password)
-      document.getElementById('db-name').value     = u.pathname.replace(/^\//, '')
-      return true
-    } catch {
-      return false
-    }
-  }
-
-  function onDbFieldChange() {
-    const dsn = dsnFromFields()
-    const el = document.getElementById('db-dsn')
-    el.value = dsn
-    // Don't mark DSN valid/invalid while the user is still filling fields
-    el.classList.remove('valid', 'invalid')
-    document.getElementById('n-db-dsn').textContent = ''
-    validateStore()
-    validateAll()
-  }
-
-  function onDsnChange() {
-    const dsn = document.getElementById('db-dsn').value.trim()
-    if (!dsn) {
-      setField('db-dsn', 'n-db-dsn', false, 'Required')
-    } else if (fieldsFromDsn(dsn)) {
-      setField('db-dsn', 'n-db-dsn', true, '')
-    } else {
-      setField('db-dsn', 'n-db-dsn', false, 'Expected mysql://user:pass@host:port/db')
-    }
-    validateStore()
-    validateAll()
-  }
-
-  function validateDbFields() {
-    const host = document.getElementById('db-host').value.trim()
-    const port = document.getElementById('db-port').value.trim()
-    const user = document.getElementById('db-user').value.trim()
-    const name = document.getElementById('db-name').value.trim()
-    return host.length > 0 && isValidPort(port) && user.length > 0 && name.length > 0
-  }
-
-  // -------------------------------------------------------------------------
-  // Section validators — return true if section is valid
-  // -------------------------------------------------------------------------
-
-  // Tracks the server-side path check result: null=pending, true=ok, false=fail
-  let _pathCheckOk = null
-  let _pathCheckTimer = null
-
-  function validateStore() {
-    const type = document.getElementById('store-type').value
-    const isDir = type === 'directory'
-    document.getElementById('f-store-path').style.display = isDir ? '' : 'none'
-    document.getElementById('f-store-db').style.display   = isDir ? 'none' : ''
-
-    let ok
-    if (isDir) {
-      const pathEl = document.getElementById('store-path')
-      if (pathEl.value.trim().length === 0) {
-        setField('store-path', 'n-store-path', false, 'Path is required')
-      }
-      ok = _pathCheckOk === true
-    } else {
-      ok = validateDbFields()
-    }
-
-    setBadge('b-store', ok, false)
-    return ok
-  }
-
-  function checkStorePath() {
-    const type = document.getElementById('store-type').value
-    if (type !== 'directory') return
-
-    const val = document.getElementById('store-path').value.trim()
-    if (!val) {
-      _pathCheckOk = false
-      setField('store-path', 'n-store-path', false, 'Path is required')
-      validateAll()
-      return
-    }
-
-    // debounce
-    clearTimeout(_pathCheckTimer)
-    document.getElementById('n-store-path').textContent = '…'
-    document.getElementById('n-store-path').className = 'field-note'
-    _pathCheckOk = null
-
-    _pathCheckTimer = setTimeout(async () => {
-      try {
-        const res = await fetch('/nt/check-path?path=' + encodeURIComponent(val))
-        const data = await res.json()
-        _pathCheckOk = data.ok
-        const msg = data.ok
-          ? (data.exists ? 'Directory exists' : 'Will be created')
-          : (data.error || 'Invalid path')
-        setField('store-path', 'n-store-path', data.ok, data.ok ? '' : msg)
-        if (data.ok) {
-          document.getElementById('n-store-path').textContent = msg
-          if (data.resolved) document.getElementById('store-path').value = data.resolved
-        }
-      } catch {
-        _pathCheckOk = false
-        setField('store-path', 'n-store-path', false, 'Could not verify path')
-      }
-      validateAll()
-    }, 400)
-  }
-
-  function validateAPI() {
-    const mode = document.getElementById('api-mode').value
-    const isRemote = mode === 'remote'
-    document.getElementById('api-remote-fields').style.display = isRemote ? '' : 'none'
-
-    if (!isRemote) {
-      setBadge('b-api', true, false)
-      return true
-    }
-
-    const hostOk = isValidHost(document.getElementById('api-host').value)
-    const portOk = isValidPort(document.getElementById('api-port').value)
-
-    setField('api-host', 'n-api-host', hostOk, hostOk ? '' : 'Required')
-    setField('api-port', 'n-api-port', portOk, portOk ? '' : '1 – 65535')
-
-    const ok = hostOk && portOk
-    setBadge('b-api', ok, false)
-    return ok
-  }
-
-  function validateNsRow(id) {
-    const hostEl = document.getElementById('ns-host-' + id)
-    const portEl = document.getElementById('ns-port-' + id)
-    const typeEl = document.getElementById('ns-type-' + id)
-    const exportEl = document.getElementById('ns-export-' + id)
-
-    if (!hostEl) return true // row removed
-
-    const hostOk = isValidHost(hostEl.value)
-    const portOk = isValidPort(portEl.value)
-    const isExport = typeEl.value === 'export'
-    const exportOk = !isExport || (exportEl && exportEl.value.length > 0)
-
-    hostEl.classList.toggle('valid', hostOk)
-    hostEl.classList.toggle('invalid', !hostOk)
-    portEl.classList.toggle('valid', portOk)
-    portEl.classList.toggle('invalid', !portOk)
-
-    return hostOk && portOk && exportOk
-  }
-
-  function validateNS() {
-    const rows = document.querySelectorAll('#ns-body tr.ns-row')
-    if (rows.length === 0) { setBadge('b-ns', false, false); return false }
-
-    let ok = true
-    for (const row of rows) {
-      if (!validateNsRow(Number(row.dataset.id))) ok = false
-    }
-    setBadge('b-ns', ok, false)
-    return ok
-  }
-
-  function validateAll() {
-    const s = validateStore()
-    const a = validateAPI()
-    validateNS()
-    // Only Store + API required to enable Save
-    document.getElementById('btn-save').disabled = !(s && a)
-    return s && a
-  }
-
-  // -------------------------------------------------------------------------
-  // Nameserver rows
-  // -------------------------------------------------------------------------
-
-  function addNsRow(ns) {
-    ns = ns || {}
-    const id = _rowSeq++
-    const isExport = ns.type === 'export'
-
-    const tr = document.createElement('tr')
-    tr.className = 'ns-row'
-    tr.dataset.id = id
-
-    // host cell
-    const tdHost = document.createElement('td')
-    const inHost = document.createElement('input')
-    inHost.type = 'text'
-    inHost.id = 'ns-host-' + id
-    inHost.value = ns.host != null ? ns.host : ''
-    inHost.placeholder = 'localhost'
-    inHost.autocomplete = 'off'
-    inHost.addEventListener('input', () => { validateNsRow(id); validateAll() })
-    tdHost.appendChild(inHost)
-    tr.appendChild(tdHost)
-
-    // port cell
-    const tdPort = document.createElement('td')
-    const inPort = document.createElement('input')
-    inPort.type = 'number'
-    inPort.id = 'ns-port-' + id
-    inPort.min = 1
-    inPort.max = 65535
-    inPort.value = ns.port != null ? ns.port : ''
-    inPort.style.width = '70px'
-    inPort.addEventListener('input', () => { validateNsRow(id); validateAll() })
-    tdPort.appendChild(inPort)
-    tr.appendChild(tdPort)
-
-    // type cell
-    const tdType = document.createElement('td')
-    const selType = document.createElement('select')
-    selType.id = 'ns-type-' + id
-    for (const val of ['native', 'export']) {
-      const opt = document.createElement('option')
-      opt.value = val
-      opt.textContent = val
-      if (ns.type === val) opt.selected = true
-      selType.appendChild(opt)
-    }
-    selType.addEventListener('change', () => { toggleExportSel(id); validateNsRow(id); validateAll() })
-    tdType.appendChild(selType)
-    tr.appendChild(tdType)
-
-    // export type cell
-    const tdExport = document.createElement('td')
-    const selExport = document.createElement('select')
-    selExport.id = 'ns-export-' + id
-    for (const val of ['database', 'axfr']) {
-      const opt = document.createElement('option')
-      opt.value = val
-      opt.textContent = val
-      if ((ns.exportType || 'database') === val) opt.selected = true
-      selExport.appendChild(opt)
-    }
-    if (!isExport) selExport.style.visibility = 'hidden'
-    selExport.addEventListener('change', () => { validateNsRow(id); validateAll() })
-    tdExport.appendChild(selExport)
-    tr.appendChild(tdExport)
-
-    // remove button cell
-    const tdRemove = document.createElement('td')
-    const btnRemove = document.createElement('button')
-    btnRemove.type = 'button'
-    btnRemove.className = 'btn-remove'
-    btnRemove.title = 'Remove'
-    btnRemove.innerHTML = '&times;'
-    btnRemove.addEventListener('click', () => {
-      tr.remove()
-      validateAll()
-    })
-    tdRemove.appendChild(btnRemove)
-    tr.appendChild(tdRemove)
-
-    document.getElementById('ns-body').appendChild(tr)
-    validateNsRow(id)
-    validateAll()
-  }
-
-  function toggleExportSel(id) {
-    const selType = document.getElementById('ns-type-' + id)
-    const selExport = document.getElementById('ns-export-' + id)
-    if (selExport) selExport.style.visibility = selType.value === 'export' ? '' : 'hidden'
-  }
-
-  // -------------------------------------------------------------------------
-  // Collect form values into config object
-  // -------------------------------------------------------------------------
-
-  function collectConfig() {
-    const storeType = document.getElementById('store-type').value
-    const store = { type: storeType }
-
-    // Always persist all configured values regardless of active type,
-    // so switching between types doesn't lose the other type's settings.
-    const pathVal = document.getElementById('store-path').value.trim()
-    if (pathVal) store.path = pathVal
-
-    const dbHost = document.getElementById('db-host').value.trim()
-    if (dbHost) {
-      store.host     = dbHost
-      store.port     = Number(document.getElementById('db-port').value) || 3306
-      store.user     = document.getElementById('db-user').value.trim()
-      store.password = document.getElementById('db-password').value
-      store.database = document.getElementById('db-name').value.trim()
-      store.dsn      = dsnFromFields()
-    }
-
-    const mode = document.getElementById('api-mode').value
-    const api = { mode }
-    const apiHost = document.getElementById('api-host').value.trim()
-    const apiPort = Number(document.getElementById('api-port').value)
-    if (apiHost) api.host = apiHost
-    if (apiPort) api.port = apiPort
-    const config = {
-      store,
-      api,
-      nameserver: [],
-    }
-
-    for (const row of document.querySelectorAll('#ns-body tr.ns-row')) {
-      const id = Number(row.dataset.id)
-      const type = document.getElementById('ns-type-' + id).value
-      const ns = {
-        host: document.getElementById('ns-host-' + id).value.trim(),
-        port: Number(document.getElementById('ns-port-' + id).value),
-        type,
-      }
-      if (type === 'export') {
-        ns.exportType = document.getElementById('ns-export-' + id).value
-      }
-      config.nameserver.push(ns)
-    }
-
-    return config
-  }
-
-  // -------------------------------------------------------------------------
-  // Populate form from fetched config
-  // -------------------------------------------------------------------------
-
-  function populateForm(c) {
-    if (!c || typeof c !== 'object') return
-
-    if (c.store) {
-      document.getElementById('store-type').value = c.store.type || 'directory'
-      // Always populate all fields so switching types doesn't lose saved values
-      if (c.store.path) {
-        document.getElementById('store-path').value = c.store.path
-        checkStorePath()  // trigger async path validation so Save is enabled for valid paths
-      }
-      if (c.store.host || c.store.dsn) {
-        if (c.store.host) {
-          document.getElementById('db-host').value     = c.store.host
-          document.getElementById('db-port').value     = c.store.port     || '3306'
-          document.getElementById('db-user').value     = c.store.user     || ''
-          document.getElementById('db-password').value = c.store.password || ''
-          document.getElementById('db-name').value     = c.store.database || ''
-          document.getElementById('db-dsn').value      = c.store.dsn || dsnFromFields()
-        } else if (c.store.dsn) {
-          document.getElementById('db-dsn').value = c.store.dsn
-          fieldsFromDsn(c.store.dsn)
-        }
-      }
-    }
-    if (c.api) {
-      document.getElementById('api-mode').value = c.api.mode || 'local'
-      if (c.api.host) document.getElementById('api-host').value = c.api.host
-      if (c.api.port) document.getElementById('api-port').value = c.api.port
-    } else if (c._suggested?.api) {
-      // Pre-fill the suggested port on first configuration (useful if user switches to remote mode)
-      document.getElementById('api-port').value = c._suggested.api
-    }
-
-    // Clear any existing NS rows before re-populating
-    document.getElementById('ns-body').innerHTML = ''
-    const nameservers = Array.isArray(c.nameserver) && c.nameserver.length ? c.nameserver : null
-    if (nameservers) for (const ns of nameservers) addNsRow(ns)
-  }
-
-  // -------------------------------------------------------------------------
-  // Form submit
-  // -------------------------------------------------------------------------
-
-  document.getElementById('cfg').addEventListener('submit', async (e) => {
-    e.preventDefault()
-    if (!validateAll()) return
-
-    const btn = document.getElementById('btn-save')
-    const msg = document.getElementById('save-msg')
-    btn.disabled = true
-    msg.textContent = 'Saving…'
-    msg.className = ''
-
-    try {
-      const res = await fetch('/nt/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(collectConfig()),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        window.location.href = '/index.html'
-      } else {
-        msg.textContent = '✗ ' + (data.error || 'Save failed')
-        msg.className = 'err'
-        validateAll()
-      }
-    } catch (err) {
-      msg.textContent = '✗ ' + err.message
-      msg.className = 'err'
-      validateAll()
-    }
-  })
-
-  // -------------------------------------------------------------------------
-  // Wire up static field listeners
-  // -------------------------------------------------------------------------
-
-  for (const id of ['store-type', 'api-mode', 'api-host', 'api-port']) {
-    const el = document.getElementById(id)
-    if (el) el.addEventListener('input', validateAll)
-    if (el) el.addEventListener('change', validateAll)
-  }
-
-  // store-path triggers async filesystem check
-  const storePathEl = document.getElementById('store-path')
-  storePathEl.addEventListener('input', () => { checkStorePath() })
-  storePathEl.addEventListener('change', () => { checkStorePath() })
-
-  // store-type toggle: reset state, re-run relevant check
-  document.getElementById('store-type').addEventListener('change', () => {
-    _pathCheckOk = null
-    const type = document.getElementById('store-type').value
-    if (type === 'directory') checkStorePath()
-    validateAll()
-  })
-
-  // database fields → rebuild DSN
-  for (const id of ['db-host', 'db-port', 'db-user', 'db-password', 'db-name']) {
-    document.getElementById(id).addEventListener('input', onDbFieldChange)
-  }
-
-  // DSN → populate individual fields
-  document.getElementById('db-dsn').addEventListener('input', onDsnChange)
-
-  document.getElementById('btn-add-ns').addEventListener('click', () => addNsRow())
-
-  // -------------------------------------------------------------------------
-  // Boot: fetch config from server then populate
-  // -------------------------------------------------------------------------
-
-  fetch('/nt/config').then((r) => r.json()).then((data) => {
-    if (data?._hostname) _serverHostname = data._hostname
-
-    populateForm(data)
-
-    // If no nameservers were populated (fresh install), add an empty starter row
-    if (document.getElementById('ns-body').children.length === 0) addNsRow()
-
-    validateAll()
-  }).catch((err) => { console.error('Config fetch failed:', err); addNsRow(); validateAll() })
-</script>
-</body>
+      <div id="ns-export-${id}">
+        <h3>Publisher</h3>
+        <div class="fields">
+          <div class="field wide">
+            <label>Zone Output Path</label>
+            <input type="text" id="ns-publisher-path-${id}" value="${escapeAttr(pubPath)}" placeholder="./data/zones-out">
+          </div>
+        </div>
+      </div>
+      <h3>Transport</h3>
+      <div class="fields">
+        <div class="field narrow">
+          <label>Interval (s)</label>
+          <input type="number" id="ns-transport-interval-${id}" min="0" value="${Number(interval) || 0}">
+          <span class="field-note">0 = event-driven</span>
+        </div>
+        <div class="field narrow">
+          <label>Cooldown (s)</label>
+          <input type="number" id="ns-transport-cooldown-${id}" min="0" value="${Number(cooldown) || 5}">
+        </div>
+        <div class="field wide" id="ns-transport-remote-wrap-${id}" style="display:none">
+          <label>Remote (rsync)</label>
+          <input type="text" id="ns-transport-remote-${id}" value="${escapeAttr(t.remote || '')}" placeholder="user@host:/etc/bind/zones">
+        </div>
+        <div class="field wide" id="ns-transport-master-wrap-${id}" style="display:none">
+          <label>Master (AXFR)</label>
+          <input type="text" id="ns-transport-master-${id}" value="${escapeAttr(t.master || '')}" placeholder="127.0.0.1">
+        </div>
+      </div>
+      <h3>DNSSEC</h3>
+      <div class="fields">
+        <div class="field narrow">
+          <label>Enabled</label>
+          <select id="ns-dnssec-enabled-${id}">
+            <option value="false" ${!d.enabled ? 'selected' : ''}>no</option>
+            <option value="true"  ${d.enabled ? 'selected' : ''}>yes</option>
+          </select>
+        </div>
+        <div class="field wide">
+          <label>Algorithm</label>
+          <select id="ns-dnssec-algo-${id}">
+            <option value="">—</option>
+            ${DNSSEC_ALGOS.map((a) => `<option value="${a}" ${d.algorithm === a ? 'selected' : ''}>${a}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field wide">
+          <label>Keyset</label>
+          <input type="text" id="ns-dnssec-keyset-${id}" value="${escapeAttr(d.keyset || '')}" placeholder="./data/dnssec/ns1">
+        </div>
+        <div class="field narrow">
+          <label>NSEC3</label>
+          <select id="ns-dnssec-nsec3-${id}">
+            <option value="false" ${!d.nsec3 ? 'selected' : ''}>no</option>
+            <option value="true"  ${d.nsec3 ? 'selected' : ''}>yes</option>
+          </select>
+        </div>
+      </div>
+    `
+            }
+
+            function escapeAttr(s) {
+                return String(s == null ? '' : s)
+                    .replace(/"/g, '&quot;')
+                    .replace(/</g, '&lt;')
+            }
+
+            function wireExpandPanel(id) {
+                const btn = document.getElementById('ns-listen-add-' + id)
+                if (btn) btn.addEventListener('click', () => addListenRow(id))
+
+                for (const k of ['interval', 'cooldown', 'remote', 'master']) {
+                    const el = document.getElementById(`ns-transport-${k}-${id}`)
+                    if (el)
+                        el.addEventListener('input', () => {
+                            validateNsRow(id)
+                            validateAll()
+                        })
+                }
+                for (const k of ['enabled', 'algo', 'keyset', 'nsec3']) {
+                    const el = document.getElementById(`ns-dnssec-${k}-${id}`)
+                    if (el) el.addEventListener('change', validateAll)
+                }
+                const pathEl = document.getElementById('ns-publisher-path-' + id)
+                if (pathEl)
+                    pathEl.addEventListener('input', () => {
+                        validateNsRow(id)
+                        validateAll()
+                    })
+
+                const transEl = document.getElementById('ns-transport-type-' + id)
+                if (transEl)
+                    transEl.addEventListener('change', () => onTransportTypeChange(id))
+                onTransportTypeChange(id)
+            }
+
+            function onTransportTypeChange(id) {
+                const t = document.getElementById('ns-transport-type-' + id).value
+                document.getElementById('ns-transport-remote-wrap-' + id).style.display =
+                    t === 'rsync' ? '' : 'none'
+                document.getElementById('ns-transport-master-wrap-' + id).style.display =
+                    t === 'axfr' ? '' : 'none'
+            }
+
+            function onEngineChange(id) {
+                const engine = document.getElementById('ns-engine-' + id).value
+                const isNative = engine === 'native'
+                document.getElementById('ns-native-' + id).style.display = isNative
+                    ? ''
+                    : 'none'
+                document.getElementById('ns-export-' + id).style.display = isNative
+                    ? 'none'
+                    : ''
+
+                // Sensible default transport for the chosen engine
+                const transEl = document.getElementById('ns-transport-type-' + id)
+                if (isNative && !['noop'].includes(transEl.value)) transEl.value = 'noop'
+                if (!isNative && transEl.value === 'noop') transEl.value = 'rsync'
+                onTransportTypeChange(id)
+            }
+
+            function addListenRow(id, seed) {
+                seed = seed || {}
+                const tbody = document.getElementById('ns-listen-body-' + id)
+                const tr = document.createElement('tr')
+                tr.className = 'listen-row'
+
+                const addrTd = document.createElement('td')
+                const addr = document.createElement('input')
+                addr.type = 'text'
+                addr.className = 'listen-address'
+                addr.value = seed.address ?? '127.0.0.1'
+                addr.addEventListener('input', () => {
+                    validateNsRow(id)
+                    validateAll()
+                })
+                addrTd.appendChild(addr)
+                tr.appendChild(addrTd)
+
+                const portTd = document.createElement('td')
+                const port = document.createElement('input')
+                port.type = 'number'
+                port.className = 'listen-port'
+                port.min = 1
+                port.max = 65535
+                port.value = seed.port ?? 53
+                port.addEventListener('input', () => {
+                    validateNsRow(id)
+                    validateAll()
+                })
+                portTd.appendChild(port)
+                tr.appendChild(portTd)
+
+                const protoTd = document.createElement('td')
+                const proto = document.createElement('select')
+                proto.className = 'listen-proto'
+                for (const v of ['udp', 'tcp']) {
+                    const o = document.createElement('option')
+                    o.value = v
+                    o.textContent = v
+                    if ((seed.proto || 'udp') === v) o.selected = true
+                    proto.appendChild(o)
+                }
+                protoTd.appendChild(proto)
+                tr.appendChild(protoTd)
+
+                const rmTd = document.createElement('td')
+                const rm = document.createElement('button')
+                rm.type = 'button'
+                rm.className = 'btn-remove'
+                rm.innerHTML = '&times;'
+                rm.addEventListener('click', () => {
+                    tr.remove()
+                    validateNsRow(id)
+                    validateAll()
+                })
+                rmTd.appendChild(rm)
+                tr.appendChild(rmTd)
+
+                tbody.appendChild(tr)
+            }
+
+            // -------------------------------------------------------------------------
+            // Collect form values into config object
+            // -------------------------------------------------------------------------
+
+            function collectConfig() {
+                const storeType = document.getElementById('store-type').value
+                const store = { type: storeType }
+
+                // Always persist all configured values regardless of active type,
+                // so switching between types doesn't lose the other type's settings.
+                const pathVal = document.getElementById('store-path').value.trim()
+                if (pathVal) store.path = pathVal
+
+                const dbHost = document.getElementById('db-host').value.trim()
+                if (dbHost) {
+                    store.host = dbHost
+                    store.port = Number(document.getElementById('db-port').value) || 3306
+                    store.user = document.getElementById('db-user').value.trim()
+                    store.password = document.getElementById('db-password').value
+                    store.database = document.getElementById('db-name').value.trim()
+                    store.dsn = dsnFromFields()
+                }
+
+                const mode = document.getElementById('api-mode').value
+                const api = { mode }
+                const apiHost = document.getElementById('api-host').value.trim()
+                const apiPort = Number(document.getElementById('api-port').value)
+                if (apiHost) api.host = apiHost
+                if (apiPort) api.port = apiPort
+                const config = {
+                    store,
+                    api,
+                    nameserver: [],
+                }
+
+                for (const row of document.querySelectorAll('#ns-body tr.ns-row')) {
+                    const id = Number(row.dataset.id)
+                    config.nameserver.push(collectNsRow(id))
+                }
+
+                return config
+            }
+
+            function collectNsRow(id) {
+                const engine = document.getElementById('ns-engine-' + id).value
+                const ns = {
+                    name: document.getElementById('ns-name-' + id).value.trim(),
+                    engine,
+                }
+
+                if (engine === 'native') {
+                    ns.listen = []
+                    for (const r of document.querySelectorAll(
+                        `#ns-listen-body-${id} tr.listen-row`,
+                    )) {
+                        const address = r.querySelector('.listen-address').value.trim()
+                        const port = Number(r.querySelector('.listen-port').value)
+                        const proto = r.querySelector('.listen-proto').value
+                        if (address && port) ns.listen.push({ address, port, proto })
+                    }
+                    ns.publisher = { type: 'memory' }
+                } else {
+                    const path = document
+                        .getElementById('ns-publisher-path-' + id)
+                        .value.trim()
+                    ns.publisher = { type: PUBLISHER_BY_ENGINE[engine] || 'rfc1035' }
+                    if (path) ns.publisher.path = path
+                }
+
+                const transport = {
+                    type: document.getElementById('ns-transport-type-' + id).value,
+                    interval:
+                        Number(
+                            document.getElementById('ns-transport-interval-' + id).value,
+                        ) || 0,
+                    cooldown:
+                        Number(
+                            document.getElementById('ns-transport-cooldown-' + id).value,
+                        ) || 0,
+                }
+                const remote = document
+                    .getElementById('ns-transport-remote-' + id)
+                    .value.trim()
+                const master = document
+                    .getElementById('ns-transport-master-' + id)
+                    .value.trim()
+                if (transport.type === 'rsync' && remote) transport.remote = remote
+                if (transport.type === 'axfr' && master) transport.master = master
+                ns.transport = transport
+
+                const dEnabled =
+                    document.getElementById('ns-dnssec-enabled-' + id).value === 'true'
+                const dAlgo = document.getElementById('ns-dnssec-algo-' + id).value
+                const dKeyset = document
+                    .getElementById('ns-dnssec-keyset-' + id)
+                    .value.trim()
+                const dNsec3 =
+                    document.getElementById('ns-dnssec-nsec3-' + id).value === 'true'
+                if (dEnabled || dAlgo || dKeyset || dNsec3) {
+                    ns.dnssec = { enabled: dEnabled, nsec3: dNsec3 }
+                    if (dAlgo) ns.dnssec.algorithm = dAlgo
+                    if (dKeyset) ns.dnssec.keyset = dKeyset
+                }
+
+                return ns
+            }
+
+            // -------------------------------------------------------------------------
+            // Populate form from fetched config
+            // -------------------------------------------------------------------------
+
+            function populateForm(c) {
+                if (!c || typeof c !== 'object') return
+
+                if (c.store) {
+                    document.getElementById('store-type').value =
+                        c.store.type || 'directory'
+                    // Always populate all fields so switching types doesn't lose saved values
+                    if (c.store.path) {
+                        document.getElementById('store-path').value = c.store.path
+                        checkStorePath() // trigger async path validation so Save is enabled for valid paths
+                    }
+                    if (c.store.host || c.store.dsn) {
+                        if (c.store.host) {
+                            document.getElementById('db-host').value = c.store.host
+                            document.getElementById('db-port').value =
+                                c.store.port || '3306'
+                            document.getElementById('db-user').value = c.store.user || ''
+                            document.getElementById('db-password').value =
+                                c.store.password || ''
+                            document.getElementById('db-name').value =
+                                c.store.database || ''
+                            document.getElementById('db-dsn').value =
+                                c.store.dsn || dsnFromFields()
+                        } else if (c.store.dsn) {
+                            document.getElementById('db-dsn').value = c.store.dsn
+                            fieldsFromDsn(c.store.dsn)
+                        }
+                    }
+                }
+                if (c.api) {
+                    document.getElementById('api-mode').value = c.api.mode || 'local'
+                    if (c.api.host) document.getElementById('api-host').value = c.api.host
+                    if (c.api.port) document.getElementById('api-port').value = c.api.port
+                } else if (c._suggested?.api) {
+                    // Pre-fill the suggested port on first configuration (useful if user switches to remote mode)
+                    document.getElementById('api-port').value = c._suggested.api
+                }
+
+                // Clear any existing NS rows before re-populating
+                document.getElementById('ns-body').innerHTML = ''
+                const nameservers =
+                    Array.isArray(c.nameserver) && c.nameserver.length
+                        ? c.nameserver
+                        : null
+                if (nameservers)
+                    for (const ns of nameservers) addNsRow(migrateLegacyNs(ns))
+            }
+
+            // -------------------------------------------------------------------------
+            // Form submit
+            // -------------------------------------------------------------------------
+
+            document.getElementById('cfg').addEventListener('submit', async (e) => {
+                e.preventDefault()
+                if (!validateAll()) return
+
+                const btn = document.getElementById('btn-save')
+                const msg = document.getElementById('save-msg')
+                btn.disabled = true
+                msg.textContent = 'Saving…'
+                msg.className = ''
+
+                try {
+                    const res = await fetch('/nt/config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(collectConfig()),
+                    })
+                    const data = await res.json()
+                    if (res.ok) {
+                        window.location.href = '/index.html'
+                    } else {
+                        msg.textContent = '✗ ' + (data.error || 'Save failed')
+                        msg.className = 'err'
+                        validateAll()
+                    }
+                } catch (err) {
+                    msg.textContent = '✗ ' + err.message
+                    msg.className = 'err'
+                    validateAll()
+                }
+            })
+
+            // -------------------------------------------------------------------------
+            // Wire up static field listeners
+            // -------------------------------------------------------------------------
+
+            for (const id of ['store-type', 'api-mode', 'api-host', 'api-port']) {
+                const el = document.getElementById(id)
+                if (el) el.addEventListener('input', validateAll)
+                if (el) el.addEventListener('change', validateAll)
+            }
+
+            // store-path triggers async filesystem check
+            const storePathEl = document.getElementById('store-path')
+            storePathEl.addEventListener('input', () => {
+                checkStorePath()
+            })
+            storePathEl.addEventListener('change', () => {
+                checkStorePath()
+            })
+
+            // store-type toggle: reset state, re-run relevant check
+            document.getElementById('store-type').addEventListener('change', () => {
+                _pathCheckOk = null
+                const type = document.getElementById('store-type').value
+                if (type === 'directory') checkStorePath()
+                validateAll()
+            })
+
+            // database fields → rebuild DSN
+            for (const id of [
+                'db-host',
+                'db-port',
+                'db-user',
+                'db-password',
+                'db-name',
+            ]) {
+                document.getElementById(id).addEventListener('input', onDbFieldChange)
+            }
+
+            // DSN → populate individual fields
+            document.getElementById('db-dsn').addEventListener('input', onDsnChange)
+
+            document
+                .getElementById('btn-add-ns')
+                .addEventListener('click', () => addNsRow())
+
+            // -------------------------------------------------------------------------
+            // Boot: fetch config from server then populate
+            // -------------------------------------------------------------------------
+
+            fetch('/nt/config')
+                .then((r) => r.json())
+                .then((data) => {
+                    if (data?._hostname) _serverHostname = data._hostname
+
+                    populateForm(data)
+
+                    // If no nameservers were populated (fresh install), add an empty starter row
+                    if (document.getElementById('ns-body').children.length === 0)
+                        addNsRow()
+
+                    validateAll()
+                })
+                .catch((err) => {
+                    console.error('Config fetch failed:', err)
+                    addNsRow()
+                    validateAll()
+                })
+        </script>
+    </body>
 </html>

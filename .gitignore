@@ -111,3 +111,7 @@ CLAUDE.md
 GEMINI.md
 data/
 conf.d
+
+# Playwright
+test-results/
+playwright-report/

@@ -4,6 +4,7 @@ import path from 'node:path'
 import fs from 'node:fs/promises'
 
 import { stringify } from 'smol-toml'
+import mysql from 'mysql2/promise'
 
 const __dirname = new URL('.', import.meta.url).pathname
 
@@ -47,10 +48,11 @@ export async function startServer({
   apiRemoteUrl = null,
   suggestedPorts = null,
   onSaved = null,
+  supervisor = null,
 }) {
   const tomlPath = path.join(configDir, 'etc', 'nictool.toml')
   // ctx is mutated as services start/stop
-  const ctx = { configDir, tomlPath, nicConfig, apiServer, apiRemoteUrl, suggestedPorts, host, onSaved }
+  const ctx = { configDir, tomlPath, nicConfig, apiServer, apiRemoteUrl, suggestedPorts, host, onSaved, supervisor }
 
   const server = https.createServer({ cert: tls.cert, key: tls.key }, (req, res) =>
     handleRequest(req, res, ctx),
@@ -83,8 +85,10 @@ async function handleRequest(req, res, ctx) {
     if (url === '/nt/config' && method === 'GET') return serveConfig(res, ctx)
     if (url === '/nt/config' && method === 'POST') return await saveConfig(req, res, ctx)
     if (url?.startsWith('/nt/check-path') && method === 'GET') return await checkPath(req, res, ctx)
+    if (url?.startsWith('/nt/check-dsn') && method === 'GET') return await checkDsn(req, res)
     if (url === '/nt/service' && method === 'GET') return serveService(res, ctx)
     if (url === '/nt/status' && method === 'GET') return await serveStatus(res, ctx)
+    if (url === '/nt/nameservers/status' && method === 'GET') return serveNameserversStatus(res, ctx)
 
     if (url?.startsWith('/api/') || url?.startsWith('/doc')) {
       if (ctx.apiServer) return await forwardToAPI(req, res, ctx.apiServer)
@@ -178,15 +182,66 @@ async function checkPath(req, res, { configDir }) {
   }
 }
 
-async function serveStatus(res, { tomlPath, nicConfig, apiServer }) {
+/**
+ * Parse a mysql:// DSN into a mysql2 connection config. Throws if the DSN is
+ * not a well-formed mysql URL.
+ */
+function parseMysqlDsn(dsn) {
+  const u = new URL(dsn)
+  if (u.protocol !== 'mysql:') throw new Error('DSN must use the mysql:// scheme')
+  return {
+    host: u.hostname || '127.0.0.1',
+    port: u.port ? Number(u.port) : 3306,
+    user: decodeURIComponent(u.username),
+    password: decodeURIComponent(u.password),
+    database: u.pathname.replace(/^\//, ''),
+  }
+}
+
+/**
+ * Live connectivity probe for a MySQL DSN. Opens a real (short-lived)
+ * connection and runs SELECT 1, so the configurator can light up green only
+ * when the credentials actually work. Always answers 200 with { ok, error }.
+ */
+async function checkDsn(req, res) {
+  const dsn = new URL(req.url, 'http://x').searchParams.get('dsn')
+  if (!dsn) return respond(res, 400, 'application/json', JSON.stringify({ error: 'dsn required' }))
+
+  let cfg
+  try {
+    cfg = parseMysqlDsn(dsn)
+  } catch (err) {
+    return respond(res, 200, 'application/json', JSON.stringify({ ok: false, error: err.message }))
+  }
+
+  let conn
+  try {
+    conn = await mysql.createConnection({ ...cfg, connectTimeout: 4000 })
+    await conn.query('SELECT 1')
+    respond(res, 200, 'application/json', JSON.stringify({ ok: true }))
+  } catch (err) {
+    const error = err.code ? `${err.code}: ${err.message}` : err.message
+    respond(res, 200, 'application/json', JSON.stringify({ ok: false, error }))
+  } finally {
+    try { await conn?.end() } catch { /* ignore */ }
+  }
+}
+
+async function serveStatus(res, { tomlPath, nicConfig, apiServer, supervisor }) {
   const configured = await fileExists(tomlPath)
   const api = { running: apiServer != null }
+  const nameservers = supervisor?.status?.() ?? []
   respond(
     res,
     200,
     'application/json',
-    JSON.stringify({ configured, tomlPath, config: nicConfig, api }, null, 2),
+    JSON.stringify({ configured, tomlPath, config: nicConfig, api, nameservers }, null, 2),
   )
+}
+
+function serveNameserversStatus(res, { supervisor }) {
+  const nameservers = supervisor?.status?.() ?? []
+  respond(res, 200, 'application/json', JSON.stringify({ nameservers }, null, 2))
 }
 
 async function saveConfig(req, res, ctx) {

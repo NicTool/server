@@ -1,12 +1,22 @@
-import * as RR from "/nictool/dns-resource-record/index.js";
+import * as RR from "@nictool/dns-resource-record";
+
+import { Cookie } from "./lib/cookie.js";
+import {
+  escapeHtml,
+  fieldToId,
+  formatZoneRecordTtl,
+  getRdataPreview,
+  parseInputValue,
+  parseOptionalTtlValue,
+} from "./lib/format.js";
+import { parseHumanTime, secondsToHuman } from "./lib/time.js";
+import { normalizeOwnerForZone } from "./lib/zone-name.js";
+import "./components/zone-records.js";
+import "./components/zone-table.js";
+import "./components/ns-table.js";
+import "./components/user-table.js";
 
 const API_URI = "/api";
-let nsDataTable;
-let zoneDataTable;
-let userDataTable;
-const zoneRecordDataTables = new Map();
-const zoneColumnSearchTimers = new Map();
-const RR_DATA_PREVIEW_CHARS = 50;
 const CONFIRM_DELETES_COOKIE = "nt-confirm-deletes";
 let activeZoneRecordContext;
 let currentUser = null;
@@ -27,76 +37,10 @@ function initDangerousModeToggle() {
   });
 }
 
-function normalizeOwnerForZone(owner, zoneName) {
-  const zoneFqdn = `${zoneName}`.endsWith(".") ? `${zoneName}` : `${zoneName}.`;
-  let value = `${owner ?? ""}`.trim();
-
-  if (!value || value === "@") return zoneFqdn;
-  if (!value.endsWith(".")) value = `${value}.`;
-  if (value === zoneFqdn || value.endsWith(zoneFqdn)) return value;
-  return `${value}${zoneFqdn}`;
-}
-
-function parseInputValue(raw) {
-  if (typeof raw !== "string") return raw;
-  const value = raw.trim();
-  if (/^\d+$/.test(value)) return parseInt(value, 10);
-  return value;
-}
-
-function parseOptionalTtlValue(raw) {
-  if (typeof raw !== "string") return raw;
-  const value = raw.trim();
-  if (value === "") return undefined;
-  if (/^\d+$/.test(value)) return parseInt(value, 10);
-  return value;
-}
-
-function formatZoneRecordTtl(ttl) {
-  return ttl === 0 || ttl === undefined || ttl === null ? "" : `${ttl}`;
-}
-
 let currentGroupId = null;
 let rootGroupId = null;
 let groupHistory = []; // stack of { id, name } for breadcrumb navigation
 let zoneDefaults = { ttl: 86400, refresh: 16384, retry: 900, expire: 1048576, minimum: 2560 };
-
-function fieldToId(field) {
-  return field.replace(/\s+/g, "-");
-}
-
-function secondsToHuman(secs) {
-  const n = parseInt(secs, 10);
-  if (!Number.isFinite(n) || n < 0) return "";
-  if (n === 0) return "0s";
-  const units = [
-    [604800, "w", 1],
-    [86400,  "d", 1],
-    [3600,   "h", 1],
-    [60,     "m", 0],
-    [1,      "s", 0],
-  ];
-  for (const [div, unit, decimals] of units) {
-    if (n >= div) {
-      const val = n / div;
-      const factor = Math.pow(10, decimals);
-      const rounded = Math.round(val * factor) / factor;
-      return `${rounded}${unit}`;
-    }
-  }
-  return `${n}s`;
-}
-
-function parseHumanTime(raw) {
-  const s = `${raw ?? ""}`.trim();
-  if (/^\d+$/.test(s)) return parseInt(s, 10);
-  const match = s.match(/^(\d+(?:\.\d+)?)\s*([smhdwSMHDW])$/);
-  if (!match) return null;
-  const val = parseFloat(match[1]);
-  const unit = match[2].toLowerCase();
-  const multipliers = { s: 1, m: 60, h: 3600, d: 86400, w: 604800 };
-  return Math.round(val * multipliers[unit]);
-}
 
 function attachTimeField(inputId, displayId) {
   const input = document.getElementById(inputId);
@@ -175,34 +119,6 @@ function openCreateZoneRecordModal(zone) {
   modal.show();
 }
 
-function setZoneRowOpenState(tr, isOpen) {
-  tr.classList.toggle("zone-row-open", isOpen);
-  const icon = tr.querySelector(".zone-toggle-icon");
-  if (icon) icon.textContent = isOpen ? "▾" : "▸";
-}
-
-function escapeHtml(value) {
-  return `${value ?? ""}`
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function getRdataPreview(value, maxChars = RR_DATA_PREVIEW_CHARS) {
-  const full = `${value ?? ""}`;
-  if (full.length <= maxChars) {
-    return { full, preview: full, isTrimmed: false };
-  }
-
-  return {
-    full,
-    preview: `${full.slice(0, maxChars - 3)}...`,
-    isTrimmed: true,
-  };
-}
-
 async function copyTextToClipboard(value) {
   const text = `${value ?? ""}`;
 
@@ -245,39 +161,17 @@ const ajax = async (config) => {
   }
 };
 
-const Cookie = {
-  // https://stackoverflow.com/questions/4825683/how-do-i-create-and-read-a-value-from-cookie-with-javascript
-  get: (name) => {
-    let c = document.cookie.match(
-      `(?:(?:^|.*; *)${name} *= *([^;]*).*$)|^.*$`,
-    )[1];
-    if (c) return decodeURIComponent(c);
-  },
-  set: (name, value, opts = {}) => {
-    if (opts.days) {
-      opts["max-age"] = opts.days * 60 * 60 * 24;
-      delete opts.days;
-    }
-
-    opts = Object.entries(opts).reduce(
-      (accumulatedStr, [k, v]) => `${accumulatedStr}; ${k}=${v}`,
-      "",
-    );
-
-    document.cookie = name + "=" + encodeURIComponent(value) + opts;
-  },
-  delete: (name, opts) => Cookie.set(name, "", { "max-age": -1, ...opts }),
-  // path & domain must match cookie being deleted
-};
-
 function onLoad() {
   console.log("onLoad");
   populateZrEditType();
   initZoneRecordModalActions();
-  initZoneControls();
+  initZoneTable();
+  initZoneRecordsComponent();
   initDangerousModeToggle();
   initNsControls();
+  initNsTable();
   initUserControls();
+  initUserTable();
 
   if (!Cookie.get("nt-token")) {
     console.log(`Cookie/token not found`);
@@ -381,11 +275,7 @@ function switchGroup(gid, name) {
   const groupLabel = document.getElementById("group_dropdown_label");
   if (groupLabel) groupLabel.textContent = name;
   loadGroupMenu(gid, name);
-  if (zoneDataTable) {
-    zoneDataTable.ajax.reload(null, true);
-  } else {
-    showZones();
-  }
+  showZones();
   showNameservers();
   showUsers();
 }
@@ -418,7 +308,7 @@ function onLoggedIn(response) {
           currentGroupId = prev.id;
           if (groupLabel) groupLabel.textContent = prev.name;
           loadGroupMenu(prev.id, prev.name);
-          if (zoneDataTable) zoneDataTable.ajax.reload(null, true); else showZones();
+          showZones();
           showNameservers();
           showUsers();
           return;
@@ -471,22 +361,6 @@ function onLoggedOut() {
 
 const ZONE_SUBGROUPS_COOKIE = "nt-zone-include-subgroups";
 
-function initZoneControls() {
-  const deletedToggle = document.getElementById("zoneSearchDeleted");
-  if (!deletedToggle || deletedToggle.dataset.initialized === "true") return;
-  deletedToggle.dataset.initialized = "true";
-  deletedToggle.addEventListener("change", () => {
-    if (!zoneDataTable) return;
-    zoneDataTable.ajax.reload(null, true);
-  });
-
-  const createBtn = document.getElementById("zoneCreateBtn");
-  if (createBtn && !createBtn.dataset.initialized) {
-    createBtn.dataset.initialized = "true";
-    createBtn.addEventListener("click", () => openCreateZoneModal());
-  }
-}
-
 function attemptLogin() {
   const username = document.getElementById("username").value.trim();
   const password = document.getElementById("password").value;
@@ -535,123 +409,20 @@ function attemptLogout() {
 }
 
 function showNameservers() {
-  const params = new URLSearchParams();
-  if (currentGroupId) params.set("gid", `${currentGroupId}`);
-  if (document.getElementById("nsShowDeleted")?.checked) params.set("deleted", "true");
+  const el = document.getElementById("nsTable");
+  if (!el) return;
+  el.token = Cookie.get("nt-token");
+  el.confirmDeletes = isConfirmDeletesEnabled();
+  if (el.gid === currentGroupId) el.refresh();
+  else el.gid = currentGroupId;
+}
 
-  ajax({
-    method: "GET",
-    url: `${API_URI}/nameserver?${params.toString()}`,
-  }).then((response) => {
-    const table = document.getElementById("ns_table");
-    const tableHead = table.querySelector("thead");
-
-    while (tableHead.rows.length > 1) {
-      tableHead.deleteRow(1);
-    }
-
-    if (nsDataTable) {
-      nsDataTable.destroy();
-      nsDataTable = undefined;
-    }
-
-    const body = table.querySelector("tbody");
-    body.innerHTML = "";
-
-    const sorted = (response.nameserver ?? [])
-      .slice()
-      .sort((a, b) => Number(a.id) - Number(b.id));
-
-    for (const ns of sorted) {
-      const row = document.createElement("tr");
-      row.classList.add("accordion-item");
-      row.id = `ns_${ns.id}_tr`;
-      if (ns.deleted) row.classList.add("text-body-secondary");
-
-      let nameCell = escapeHtml(ns.name ?? "");
-      try {
-        // Validate the name is parseable — flag rows with missing trailing dot or other issues
-        if (ns.name && !ns.name.endsWith(".")) {
-          nameCell = `${nameCell} <span class="badge text-bg-warning ms-1" title="Name is missing a trailing dot">!</span>`;
-        }
-      } catch (e) {
-        nameCell = `${nameCell} <span class="badge text-bg-danger ms-1" title="${escapeHtml(e.message)}">invalid</span>`;
-      }
-
-      const actionButtons = ns.deleted
-        ? `<button type="button" class="btn btn-sm btn-link text-success p-0 ns-restore-btn" style="text-decoration:none;font-size:0.85rem;line-height:1;" aria-label="Restore nameserver" title="Restore nameserver">↩ Restore</button>`
-        : `<div class="d-inline-flex align-items-center gap-2"><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 ns-edit-btn" style="text-decoration:none;font-size:0.9rem;line-height:1;" aria-label="Edit nameserver">✎</button><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 ns-delete-btn" style="text-decoration:none;font-size:0.9rem;line-height:1;" aria-label="Delete nameserver" title="Delete nameserver">🗑</button></div>`;
-
-      row.innerHTML = `
-        <td>${nameCell}</td>
-        <td>${escapeHtml(ns.description ?? "")}</td>
-        <td style="text-align: right;">${escapeHtml(ns.address ?? "")}</td>
-        <td style="text-align: right;">${escapeHtml(ns.address6 ?? "")}</td>
-        <td style="text-align: center">${escapeHtml(ns.export?.type ?? "")}</td>
-        <td style="text-align: center">${actionButtons}</td>
-      `;
-
-      row.querySelector(".ns-edit-btn")?.addEventListener("click", () => openNsPane(ns));
-      row.querySelector(".ns-delete-btn")?.addEventListener("click", () => {
-        if (isConfirmDeletesEnabled()) {
-          const confirmed = window.confirm(`Delete nameserver ${ns.name}?`);
-          if (!confirmed) return;
-        }
-        ajax({ method: "DELETE", url: `${API_URI}/nameserver/${ns.id}` }).then((r) => {
-          if (r?.error) { console.error("Delete NS failed:", r); return; }
-          showNameservers();
-        });
-      });
-      row.querySelector(".ns-restore-btn")?.addEventListener("click", () => {
-        ajax({ method: "PUT", url: `${API_URI}/nameserver/${ns.id}`, payload: { deleted: false } }).then((r) => {
-          if (r?.error) { console.error("Restore NS failed:", r); return; }
-          showNameservers();
-        });
-      });
-
-      body.appendChild(row);
-    }
-
-    const nsPageLength = 25;
-    const hasSearch = sorted.length >= nsPageLength;
-    let filterRow;
-    if (hasSearch) {
-      filterRow = tableHead.rows[0].cloneNode(true);
-      filterRow.classList.add("ns-filter-row");
-      for (let i = 0; i < filterRow.cells.length; i++) {
-        const cell = filterRow.cells[i];
-        if (i === filterRow.cells.length - 1) {
-          cell.innerHTML = "";
-          continue;
-        }
-        const title = tableHead.rows[0].cells[i].textContent.trim();
-        cell.innerHTML = `<input type="search" class="form-control form-control-sm" placeholder="Search ${title}" aria-label="Search ${title}">`;
-      }
-      tableHead.appendChild(filterRow);
-    }
-
-    nsDataTable = new DataTable(table, {
-      orderCellsTop: true,
-      pageLength: nsPageLength,
-      lengthMenu: [10, 25, 50, 100],
-      layout: { topStart: 'info', bottomStart: 'pageLength', topEnd: null },
-      columnDefs: [
-        { orderable: false, searchable: false, targets: [5] },
-      ],
-      initComplete() {
-        const api = this.api();
-        if (hasSearch && filterRow) {
-          api.columns().every(function (index) {
-            const input = filterRow.cells[index].querySelector("input");
-            if (!input) return;
-            input.addEventListener("input", () => {
-              if (this.search() !== input.value) this.search(input.value).draw();
-            });
-          });
-        }
-      },
-    });
-  });
+function initNsTable() {
+  const el = document.getElementById("nsTable");
+  if (!el || el.dataset.initialized === "true") return;
+  el.dataset.initialized = "true";
+  el.addEventListener("ns-create", () => openNsPane(null));
+  el.addEventListener("ns-edit", (event) => openNsPane(event.detail.ns));
 }
 
 let activeNsContext = null;
@@ -671,18 +442,6 @@ function openNsPane(ns) {
 }
 
 function initNsControls() {
-  const createBtn = document.getElementById("nsCreateBtn");
-  if (createBtn && !createBtn.dataset.initialized) {
-    createBtn.dataset.initialized = "true";
-    createBtn.addEventListener("click", () => openNsPane(null));
-  }
-
-  const deletedToggle = document.getElementById("nsShowDeleted");
-  if (deletedToggle && !deletedToggle.dataset.initialized) {
-    deletedToggle.dataset.initialized = "true";
-    deletedToggle.addEventListener("change", () => showNameservers());
-  }
-
   const saveBtn = document.getElementById("nsEditSaveBtn");
   if (saveBtn && !saveBtn.dataset.initialized) {
     saveBtn.dataset.initialized = "true";
@@ -729,102 +488,20 @@ function initNsControls() {
 }
 
 function showUsers() {
-  const params = new URLSearchParams();
-  if (currentGroupId) params.set("gid", `${currentGroupId}`);
-  if (document.getElementById("userShowDeleted")?.checked) params.set("deleted", "true");
+  const el = document.getElementById("userTable");
+  if (!el) return;
+  el.token = Cookie.get("nt-token");
+  el.confirmDeletes = isConfirmDeletesEnabled();
+  if (el.gid === currentGroupId) el.refresh();
+  else el.gid = currentGroupId;
+}
 
-  ajax({
-    method: "GET",
-    url: `${API_URI}/user${params.toString() ? "?" + params.toString() : ""}`,
-  }).then((response) => {
-    const table = document.getElementById("user_table");
-    const tableHead = table.querySelector("thead");
-
-    while (tableHead.rows.length > 1) {
-      tableHead.deleteRow(1);
-    }
-
-    if (userDataTable) {
-      userDataTable.destroy();
-      userDataTable = undefined;
-    }
-
-    const body = table.querySelector("tbody");
-    body.innerHTML = "";
-
-    const sorted = (response.user ?? [])
-      .slice()
-      .sort((a, b) => Number(a.id) - Number(b.id));
-
-    for (const u of sorted) {
-      const row = document.createElement("tr");
-      row.id = `user_${u.id}_tr`;
-      if (u.deleted) row.classList.add("text-body-secondary");
-      const userActionButtons = u.deleted
-        ? `<button type="button" class="btn btn-sm btn-link text-success p-0 user-restore-btn" style="text-decoration:none;font-size:0.85rem;line-height:1;" title="Restore user">↩ Restore</button>`
-        : `<div class="d-inline-flex align-items-center gap-2"><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 user-edit-btn" style="text-decoration:none;font-size:0.9rem;line-height:1;" aria-label="Edit user">✎</button><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 user-delete-btn" style="text-decoration:none;font-size:0.9rem;line-height:1;" aria-label="Delete user" title="Delete user">🗑</button></div>`;
-      row.innerHTML = `
-        <td>${escapeHtml(u.username ?? "")}</td>
-        <td>${escapeHtml((u.first_name ?? "") + (u.last_name ? " " + u.last_name : ""))}</td>
-        <td>${escapeHtml(u.email ?? "")}</td>
-        <td style="text-align: center; white-space: nowrap">${userActionButtons}</td>
-      `;
-      row.querySelector(".user-edit-btn")?.addEventListener("click", () => openUserPane(u));
-      row.querySelector(".user-delete-btn")?.addEventListener("click", () => {
-        if (isConfirmDeletesEnabled()) {
-          const confirmed = window.confirm(`Delete user ${u.username}?`);
-          if (!confirmed) return;
-        }
-        ajax({ method: "DELETE", url: `${API_URI}/user/${u.id}` }).then((response) => {
-          if (response?.error) { console.error("Delete user failed:", response); return; }
-          showUsers();
-        });
-      });
-      row.querySelector(".user-restore-btn")?.addEventListener("click", () => {
-        ajax({ method: "PUT", url: `${API_URI}/user/${u.id}`, payload: { deleted: false } }).then((r) => {
-          if (r?.error) { console.error("Restore user failed:", r); return; }
-          showUsers();
-        });
-      });
-      body.appendChild(row);
-    }
-
-    const userPageLength = 25;
-    const hasSearch = sorted.length > 10;
-    let filterRow;
-    if (hasSearch) {
-      filterRow = tableHead.rows[0].cloneNode(true);
-      filterRow.classList.add("user-filter-row");
-      for (let i = 0; i < filterRow.cells.length; i++) {
-        const cell = filterRow.cells[i];
-        if (i === filterRow.cells.length - 1) { cell.innerHTML = ""; continue; }
-        const title = tableHead.rows[0].cells[i].textContent.trim();
-        cell.innerHTML = `<input type="search" class="form-control form-control-sm" placeholder="Search ${title}" aria-label="Search ${title}">`;
-      }
-      tableHead.appendChild(filterRow);
-    }
-
-    userDataTable = new DataTable(table, {
-      orderCellsTop: true,
-      pageLength: userPageLength,
-      lengthMenu: [10, 25, 50, 100],
-      layout: { topStart: 'info', bottomStart: 'pageLength', topEnd: null},
-      columnDefs: [
-        { orderable: false, searchable: false, targets: [3] },
-      ],
-      initComplete() {
-        if (!hasSearch) return;
-        const api = this.api();
-        api.columns().every(function (index) {
-          const input = filterRow.cells[index].querySelector("input");
-          if (!input) return;
-          input.addEventListener("input", () => {
-            if (this.search() !== input.value) this.search(input.value).draw();
-          });
-        });
-      },
-    });
-  });
+function initUserTable() {
+  const el = document.getElementById("userTable");
+  if (!el || el.dataset.initialized === "true") return;
+  el.dataset.initialized = "true";
+  el.addEventListener("user-create", () => openUserPane(null));
+  el.addEventListener("user-edit", (event) => openUserPane(event.detail.user));
 }
 
 let activeUserContext = null;
@@ -844,18 +521,6 @@ function openUserPane(user) {
 }
 
 function initUserControls() {
-  const deletedToggle = document.getElementById("userShowDeleted");
-  if (deletedToggle && !deletedToggle.dataset.initialized) {
-    deletedToggle.dataset.initialized = "true";
-    deletedToggle.addEventListener("change", () => showUsers());
-  }
-
-  const createBtn = document.getElementById("userCreateBtn");
-  if (createBtn && !createBtn.dataset.initialized) {
-    createBtn.dataset.initialized = "true";
-    createBtn.addEventListener("click", () => openUserPane(null));
-  }
-
   const pwField = document.getElementById("userEditPassword");
   const hintsEl = document.getElementById("userPasswordHints");
   if (pwField && hintsEl && !pwField.dataset.hintsInitialized) {
@@ -929,577 +594,69 @@ function initUserControls() {
 }
 
 function showZones() {
-  const ztbody = document.getElementById("zone_tbody");
-  if (!ztbody) return;
-  const table = document.getElementById("zone_table");
-  if (!table) return;
+  const el = document.getElementById("zoneTable");
+  if (!el) return;
+  el.token = Cookie.get("nt-token");
+  el.confirmDeletes = isConfirmDeletesEnabled();
+  el.includeSubgroups = Cookie.get(ZONE_SUBGROUPS_COOKIE) === "1";
+  if (el.gid === currentGroupId) el.refresh();
+  else el.gid = currentGroupId;
+}
 
-  if (zoneDataTable) {
-    zoneDataTable.ajax.reload();
-    return;
-  }
+function refreshZones() {
+  document.getElementById("zoneTable")?.refresh();
+}
 
-  const tableHead = table.querySelector("thead");
-  while (tableHead.rows.length > 1) {
-    tableHead.deleteRow(1);
-  }
+function initZoneTable() {
+  const el = document.getElementById("zoneTable");
+  if (!el || el.dataset.initialized === "true") return;
+  el.dataset.initialized = "true";
+  el.addEventListener("zone-open-records", (e) => openZoneRecordsModal(e.detail.zone));
+  el.addEventListener("zone-create", () => openCreateZoneModal());
+  el.addEventListener("zone-edit", (e) => openEditZoneModal(e.detail.zone));
+  el.addEventListener("zone-add-record", (e) => openCreateZoneRecordModal(e.detail.zone));
+  el.addEventListener("subgroups-change", (e) => {
+    Cookie.set(ZONE_SUBGROUPS_COOKIE, e.detail.value ? "1" : "0", { days: 365 });
+  });
+}
 
-  const filterRow = tableHead.rows[0].cloneNode(true);
-  filterRow.classList.add("zone-filter-row");
-  for (let i = 0; i < filterRow.cells.length; i++) {
-    if (i === 0 || i === filterRow.cells.length - 1) {
-      filterRow.cells[i].innerHTML = "";
-      continue;
-    }
-    const title = tableHead.rows[0].cells[i].textContent.trim();
-    filterRow.cells[i].innerHTML = `<input type="search" class="form-control form-control-sm" placeholder="Search ${title}" aria-label="Search ${title}">`;
-  }
-  tableHead.appendChild(filterRow);
+function openZoneRecordsModal(zone) {
+  const modalEl = document.getElementById("zoneRecordsModal");
+  const component = document.getElementById("zoneRecordsComponent");
+  if (!modalEl || !component) return;
 
-  zoneDataTable = new DataTable(table, {
-    processing: true,
-    serverSide: true,
-    searchDelay: 400,
-    orderCellsTop: true,
-    pageLength: 25,
-    lengthMenu: [10, 25, 50, 100],
-    layout: { topStart: 'info', bottomStart: 'pageLength', topEnd: null},
-    columnDefs: [{ orderable: false, searchable: false, targets: [0, 3] }],
-    order: [[1, "asc"]],
-    columns: [
-      {
-        data: null,
-        defaultContent: '<span class="zone-toggle-icon" aria-hidden="true">▸</span>',
-        className: "text-center",
-      },
-      { data: "zone", defaultContent: "", className: "zone-name-toggle" },
-      { data: "description", defaultContent: "" },
-      {
-        data: null,
-        className: "text-center",
-        render(rowData) {
-          if (rowData?.deleted) {
-            return `<div class="d-inline-flex"><button type="button" class="btn btn-sm btn-link text-success p-0 zone-restore-btn" aria-label="Restore zone" title="Restore zone" style="text-decoration:none;font-size:0.9rem;line-height:1;">↩ Restore</button></div>`;
-          }
-          return `<div class="d-inline-flex align-items-center gap-2"><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 zone-add-zr-btn" aria-label="Add resource record" title="Add resource record" style="text-decoration: none; font-size: 1rem; line-height: 1;">+</button><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 zone-edit-btn" aria-label="Edit zone" title="Edit zone" style="text-decoration: none; font-size: 0.9rem; line-height: 1;">✎</button><button type="button" class="btn btn-sm btn-link text-body-secondary p-0 zone-delete-btn" aria-label="Delete zone" title="Delete zone" style="text-decoration: none; font-size: 0.9rem; line-height: 1;">🗑</button></div>`;
-        },
-      },
-    ],
-    async ajax(data, callback) {
-      const params = new URLSearchParams();
-      params.set("limit", `${data.length}`);
-      params.set("offset", `${data.start}`);
+  const titleEl = document.getElementById("zoneRecordsModalLabel");
+  if (titleEl) titleEl.textContent = `${zone.zone} — records`;
 
-      const includeDeleted = document.getElementById("zoneSearchDeleted")?.checked === true;
-      if (includeDeleted) params.set("deleted", "true");
-      if (currentGroupId) params.set("gid", `${currentGroupId}`);
-      if (document.getElementById("zoneIncludeSubgroups")?.checked) params.set("include_subgroups", "true");
+  component.token = Cookie.get("nt-token");
+  component.confirmDeletes = isConfirmDeletesEnabled();
+  component.zone = zone;
 
-      const globalSearch = `${data.search?.value ?? ""}`.trim();
-      if (globalSearch) params.set("search", globalSearch);
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
 
-      const zoneLike = `${data.columns?.[1]?.search?.value ?? ""}`.trim();
-      if (zoneLike) params.set("zone_like", zoneLike);
+function refreshZoneRecordsComponent() {
+  const component = document.getElementById("zoneRecordsComponent");
+  if (component?.zone) component.refresh();
+}
 
-      const descriptionLike = `${data.columns?.[2]?.search?.value ?? ""}`.trim();
-      if (descriptionLike) params.set("description_like", descriptionLike);
+function initZoneRecordsComponent() {
+  const component = document.getElementById("zoneRecordsComponent");
+  if (!component || component.dataset.initialized === "true") return;
+  component.dataset.initialized = "true";
 
-      const order = data.order?.[0] ?? { column: 1, dir: "asc" };
-      const sortBy = { 1: "zone", 2: "description" }[order.column] ?? "zone";
-      params.set("sort_by", sortBy);
-      params.set("sort_dir", order.dir === "desc" ? "desc" : "asc");
-
-      const response = await ajax({
-        method: "GET",
-        url: `${API_URI}/zone?${params.toString()}`,
-      });
-
-      const rows = response?.zone ?? [];
-      const total = response?.meta?.pagination?.total ?? rows.length;
-      const filtered = response?.meta?.pagination?.filtered ?? total;
-
-      callback({
-        data: rows,
-        recordsTotal: total,
-        recordsFiltered: filtered,
-      });
-    },
-    createdRow(row, data) {
-      row.id = `zone_${data.id}_tr`;
-      row.dataset.zoneId = `${data.id}`;
-      row.classList.add("zone-row");
-      if (row.cells[0]) {
-        row.cells[0].classList.add("zone-disclosure");
-        row.cells[0].setAttribute("title", "Expand/collapse zone records");
-      }
-      if (row.cells[1]) {
-        row.cells[1].classList.add("zone-name-toggle");
-        row.cells[1].setAttribute("title", "Click to expand/collapse zone records");
-      }
-      setZoneRowOpenState(row, false);
-    },
-    initComplete() {
-      const api = this.api();
-
-      // Rebuild Zone column cell with search input + subgroups toggle on the same line
-      const zoneSearchCell = filterRow.cells[1];
-      if (zoneSearchCell && !document.getElementById("zoneIncludeSubgroups")) {
-        zoneSearchCell.innerHTML = `
-          <div class="d-flex align-items-center gap-2">
-            <input type="search" class="form-control form-control-sm" placeholder="Search Zone" aria-label="Search Zone" style="min-width:0;flex:1 1 auto;">
-            <div class="form-check form-switch mb-0 text-nowrap flex-shrink-0">
-              <input class="form-check-input" type="checkbox" role="switch" id="zoneIncludeSubgroups" style="cursor:pointer;">
-              <label class="form-check-label small text-body-secondary" for="zoneIncludeSubgroups">Subgroups</label>
-            </div>
-          </div>`;
-        const subgroupToggle = document.getElementById("zoneIncludeSubgroups");
-        subgroupToggle.checked = Cookie.get(ZONE_SUBGROUPS_COOKIE) === "1";
-        subgroupToggle.addEventListener("change", () => {
-          Cookie.set(ZONE_SUBGROUPS_COOKIE, subgroupToggle.checked ? "1" : "0", { days: 365 });
-          if (zoneDataTable) zoneDataTable.ajax.reload(null, true);
-        });
-      }
-
-      // Bind column search inputs (after cell rebuild so the final inputs are found)
-      api.columns().every(function (index) {
-        const input = filterRow.cells[index].querySelector("input[type='search']");
-        if (!input) return;
-        input.addEventListener("input", () => {
-          clearTimeout(zoneColumnSearchTimers.get(index));
-          zoneColumnSearchTimers.set(
-            index,
-            setTimeout(() => {
-              if (this.search() !== input.value) {
-                this.search(input.value).draw();
-              }
-            }, 400),
-          );
-        });
-      });
-
-    },
+  component.addEventListener("zr-create", (event) => {
+    openCreateZoneRecordModal(event.detail.zone);
   });
 
-  ztbody.onclick = (event) => {
-    const addRecordButton = event.target.closest("button.zone-add-zr-btn");
-    if (addRecordButton) {
-      const tr = addRecordButton.closest("tr");
-      if (!tr) return;
-
-      const row = zoneDataTable.row(tr);
-      const zone = row.data();
-      if (!zone) return;
-
-      openCreateZoneRecordModal(zone);
-      return;
-    }
-
-    const zoneEditButton = event.target.closest("button.zone-edit-btn");
-    if (zoneEditButton) {
-      const tr = zoneEditButton.closest("tr");
-      if (!tr) return;
-
-      const row = zoneDataTable.row(tr);
-      const zone = row.data();
-      if (!zone) return;
-
-      openEditZoneModal(zone);
-      return;
-    }
-
-    const zoneRestoreButton = event.target.closest("button.zone-restore-btn");
-    if (zoneRestoreButton) {
-      const tr = zoneRestoreButton.closest("tr");
-      if (!tr) return;
-
-      const row = zoneDataTable.row(tr);
-      const zone = row.data();
-      if (!zone) return;
-
-      ajax({
-        method: "PUT",
-        url: `${API_URI}/zone/${zone.id}`,
-        payload: { deleted: false },
-      }).then((response) => {
-        if (response?.error) {
-          console.error("Restore zone failed:", response);
-          return;
-        }
-        zoneDataTable.ajax.reload(null, false);
-      });
-      return;
-    }
-
-    const deleteButton = event.target.closest("button.zone-delete-btn");
-    if (deleteButton) {
-      const tr = deleteButton.closest("tr");
-      if (!tr) return;
-
-      const row = zoneDataTable.row(tr);
-      const zone = row.data();
-      if (!zone) return;
-
-      if (isConfirmDeletesEnabled()) {
-        const confirmed = window.confirm(
-          `Delete zone ${zone.zone}? This hides it from default views.`,
-        );
-        if (!confirmed) return;
-      }
-
-      ajax({
-        method: "DELETE",
-        url: `${API_URI}/zone/${zone.id}`,
-      }).then((response) => {
-        if (response?.error) {
-          console.error("Delete zone failed:", response);
-          return;
-        }
-
-        const zrTable = zoneRecordDataTables.get(zone.id);
-        if (zrTable) {
-          zrTable.destroy();
-          zoneRecordDataTables.delete(zone.id);
-        }
-
-        zoneDataTable.ajax.reload(null, false);
-      });
-      return;
-    }
-
-    const toggleCell = event.target.closest("td.zone-disclosure, td.zone-name-toggle");
-    if (!toggleCell) return;
-
-    const tr = toggleCell.closest("tr");
-    if (!tr) return;
-
-    const row = zoneDataTable.row(tr);
-    const zone = row.data();
-    if (!zone) return;
-
-    if (row.child.isShown()) {
-      const zrTable = zoneRecordDataTables.get(zone.id);
-      if (zrTable) {
-        zrTable.destroy();
-        zoneRecordDataTables.delete(zone.id);
-      }
-
-      row.child.hide();
-      tr.classList.remove("shown");
-      setZoneRowOpenState(tr, false);
-      return;
-    }
-
-    row.child(`
-          <div class="accordion-body zone-records-panel">
-            <table id="zone_${zone.id}_table" class="table table-md table-striped table-hover table-bordered zone-records-table">
-                        <thead>
-                            <tr>
-                                <th style="display:none"></th>
-                                <th>Name</th>
-                                <th>Type</th>
-                                <th>Data</th>
-                                <th>TTL</th>
-                  <th style="text-align: center; width: 4rem;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="zone_${zone.id}_tbody"></tbody>
-                    </table>
-                </div>
-            `).show();
-    tr.classList.add("shown");
-    setZoneRowOpenState(tr, true);
-    showZoneRecords(zone);
-  };
-}
-
-function syntheticOwnerDisplay(owner, zone) {
-  const zoneFqdn = `${zone.zone}`.endsWith(".") ? zone.zone : `${zone.zone}.`;
-  return owner === zoneFqdn ? "@" : owner;
-}
-
-function unqualifyHost(host, zoneFqdn) {
-  if (!host) return host;
-  const fqdn = zoneFqdn.endsWith(".") ? zoneFqdn : `${zoneFqdn}.`;
-  const h    = host.endsWith(".")    ? host    : `${host}.`;
-  if (h === fqdn) return "@";
-  const suffix = `.${fqdn}`;
-  if (h.endsWith(suffix)) return h.slice(0, -suffix.length);
-  return h;
-}
-
-function buildSyntheticSoaRow(zone) {
-  const zoneFqdn = `${zone.zone}`.endsWith(".") ? zone.zone : `${zone.zone}.`;
-  const mname = Array.isArray(zone.nameservers) && zone.nameservers.length
-    ? (zone.nameservers[0].endsWith(".") ? zone.nameservers[0] : `${zone.nameservers[0]}.`)
-    : `ns1.${zoneFqdn}`;
-  const rname = zone.mailaddr
-    ? (zone.mailaddr.endsWith(".") ? zone.mailaddr : `${zone.mailaddr}.`)
-    : `hostmaster.${zoneFqdn}`;
-  const serial  = zone.serial  ?? 0;
-  const refresh = zone.refresh ?? 86400;
-  const retry   = zone.retry   ?? 7200;
-  const expire  = zone.expire  ?? 1209600;
-  const minimum = zone.minimum ?? 3600;
-  const rdata = `${unqualifyHost(mname, zoneFqdn)} ${unqualifyHost(rname, zoneFqdn)} ${serial} ${refresh} ${retry} ${expire} ${minimum}`;
-
-  const row = document.createElement("tr");
-  row.classList.add("zone-record-soa");
-  row.innerHTML = `
-    <td style="display:none">0</td>
-    <td class="small text-muted">@</td>
-    <td class="small text-muted">SOA</td>
-    <td class="small text-muted" style="width: 50%;">
-      <span class="text-truncate" style="display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(rdata)}">${escapeHtml(rdata)}</span>
-    </td>
-    <td class="small text-muted">${escapeHtml(formatZoneRecordTtl(zone.ttl))}</td>
-    <td class="small text-center"></td>
-  `;
-  return row;
-}
-
-function buildSyntheticNsRow(zr, zone) {
-  const zoneFqdn = `${zone.zone}`.endsWith(".") ? zone.zone : `${zone.zone}.`;
-  const ownerDisplay = escapeHtml(syntheticOwnerDisplay(zr.owner, zone));
-  const rdata = escapeHtml(unqualifyHost(zr.dname ?? "", zoneFqdn));
-  const row = document.createElement("tr");
-  row.classList.add("zone-record-synthetic");
-  row.innerHTML = `
-    <td style="display:none">1</td>
-    <td class="small text-muted">${ownerDisplay}</td>
-    <td class="small text-muted">NS</td>
-    <td class="small text-muted" style="width: 50%;">
-      <span class="text-truncate" style="display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${rdata}">${rdata}</span>
-    </td>
-    <td class="small text-muted">${escapeHtml(formatZoneRecordTtl(zr.ttl))}</td>
-    <td class="small text-center"></td>
-  `;
-  return row;
-}
-
-function showZoneRecords(zone) {
-  const zrTable = zoneRecordDataTables.get(zone.id);
-  if (zrTable) {
-    // Remove the custom info element inserted before the dt-container
-    const container = zrTable.table().container();
-    const prev = container?.previousElementSibling;
-    if (prev?.classList.contains("text-body-secondary")) prev.remove();
-    zrTable.destroy();
-    zoneRecordDataTables.delete(zone.id);
-  }
-
-  const table = document.getElementById(`zone_${zone.id}_table`);
-  if (!table) return;
-
-  const tbody = document.getElementById(`zone_${zone.id}_tbody`);
-  if (!tbody) return;
-  tbody.innerHTML = "";
-
-  tbody.appendChild(buildSyntheticSoaRow(zone));
-
-  Promise.all([
-    ajax({ method: "GET", url: `${API_URI}/zone_record/?zid=${zone.id}` }),
-    ajax({ method: "GET", url: `${API_URI}/zone/${zone.id}/ns` }),
-  ]).then(([response, nsResponse]) => {
-    for (const ns of nsResponse?.ns ?? []) {
-      tbody.appendChild(buildSyntheticNsRow(ns, zone));
-    }
-
-    // console.log('GET /zone_record response', response);
-
-    const hasDescriptions = response.zone_record.some((zr) => zr.description);
-    if (hasDescriptions) {
-      const thead = table.querySelector("thead tr");
-      if (thead) {
-        const actionsTh = thead.lastElementChild;
-        const descTh = document.createElement("th");
-        descTh.textContent = "Description";
-        thead.insertBefore(descTh, actionsTh);
-      }
-      for (const row of tbody.rows) {
-        const emptyTd = document.createElement("td");
-        emptyTd.className = "small text-muted";
-        row.insertBefore(emptyTd, row.lastElementChild);
-      }
-    }
-
-    const zoneFqdn = `${zone.zone}`.endsWith(".") ? zone.zone : `${zone.zone}.`;
-
-    for (const zr of response.zone_record) {
-      const row = document.createElement("tr");
-      try {
-        const owner =
-          zr.owner === zoneFqdn
-            ? zr.owner
-            : zr.owner.endsWith(zoneFqdn)
-              ? zr.owner
-              : `${zr.owner}.${zoneFqdn}`;
-        const rrCtor = RR[zr.type];
-        const asRR = new rrCtor({ ...zr, owner, type: rrCtor.name });
-        row.asRR = asRR;
-        zr.rdata = asRR
-          .getRdataFields()
-          .map((f) => {
-            if (zr.type === "AAAA" && f === "address") return asRR.getCompressed();
-            return asRR.get(f);
-          })
-          .join(" ");
-      } catch (error) {
-        console.error("Error creating RR:", error);
-      }
-      row.id = `zr_${zr.id}_tr`;
-
-      const ownerDisplay = escapeHtml(zr.owner === zoneFqdn ? "@" : zr.owner);
-      const typeDisplay = escapeHtml(zr.type);
-      const ttlDisplay = escapeHtml(formatZoneRecordTtl(zr.ttl));
-      const rdataInfo = getRdataPreview(zr.rdata);
-      const rdataDisplay = escapeHtml(rdataInfo.preview);
-      const rdataFull = escapeHtml(rdataInfo.full);
-      const trimmedMarker = rdataInfo.isTrimmed
-        ? `<span class="text-muted ms-1">[trimmed]</span>`
-        : "";
-      const copyButtonHtml = rdataInfo.isTrimmed
-        ? `<button
-                      type="button"
-                      class="btn btn-sm btn-outline-secondary zr-copy-btn"
-                      aria-label="Copy record data"
-                      title="Copy full value"
-                      style="padding-top:0.09rem;padding-bottom:0.09rem;"
-                    >Copy</button>`
-        : "";
-      const editButtonHtml = `<button
-                      type="button"
-                      class="btn btn-sm btn-link text-body-secondary p-0 zr-edit-btn"
-                      aria-label="Edit zone record"
-                      title="Edit zone record"
-                      style="text-decoration: none; font-size: 0.9rem; line-height: 1;"
-                    >✎</button>`;
-      const deleteButtonHtml = `<button
-                      type="button"
-                      class="btn btn-sm btn-link text-body-secondary p-0 zr-delete-btn"
-                      aria-label="Delete zone record"
-                      title="Delete zone record"
-                      style="text-decoration: none; font-size: 0.95rem; line-height: 1;"
-                    >🗑</button>`;
-
-      const dataCellAttrs = rdataInfo.isTrimmed
-        ? 'class="small" style="width:50%;font-size:0.75em;"'
-        : 'class="small" style="width:50%;"';
-      const dataSpanAttrs = rdataInfo.isTrimmed
-        ? `title="${rdataFull}"`
-        : `class="text-truncate" style="display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${rdataFull}"`;
-      const dataWrapperAttrs = rdataInfo.isTrimmed
-        ? 'class="d-flex flex-wrap align-items-center gap-2"'
-        : 'class="d-flex align-items-center gap-2" style="min-width:0;"';
-      row.innerHTML = `
-                <td style="display:none">2</td>
-                <td class="small" id="zr_${zr.id}_td">${ownerDisplay}</td>
-                <td class="small">${typeDisplay}</td>
-                <td ${dataCellAttrs}>
-                  <div ${dataWrapperAttrs}>
-                    <span ${dataSpanAttrs}>${rdataDisplay}</span>${trimmedMarker}
-                    ${copyButtonHtml}
-                  </div>
-                </td>
-                <td class="small">${ttlDisplay}</td>
-                ${hasDescriptions ? `<td class="small text-muted">${escapeHtml(zr.description ?? "")}</td>` : ""}
-                <td class="small text-center"><div class="d-inline-flex align-items-center gap-1">${editButtonHtml}${deleteButtonHtml}</div></td>
-            `;
-      tbody.appendChild(row);
-
-      const copyButton = row.querySelector(".zr-copy-btn");
-      if (copyButton) {
-        const rawRdata = rdataInfo.full;
-        copyButton.addEventListener("click", async (event) => {
-          event.stopPropagation();
-          event.preventDefault();
-
-          const ok = await copyTextToClipboard(rawRdata);
-
-          const original = copyButton.textContent;
-          copyButton.textContent = ok ? "Copied" : "Copy failed";
-          setTimeout(() => {
-            copyButton.textContent = original;
-          }, 1200);
-        });
-      }
-
-      const editButton = row.querySelector(".zr-edit-btn");
-      if (editButton) {
-        editButton.addEventListener("click", (event) => {
-          event.stopPropagation();
-          event.preventDefault();
-          activeZoneRecordContext = { zone, zr, mode: "edit" };
-          setZoneRecordModalMode("edit");
-          editZoneRecord(zone, zr, row.asRR);
-          const modalEl = document.getElementById("zrEditModal");
-          const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-          modal.show();
-        });
-      }
-
-      const deleteButton = row.querySelector(".zr-delete-btn");
-      if (deleteButton) {
-        deleteButton.addEventListener("click", async (event) => {
-          event.stopPropagation();
-          event.preventDefault();
-
-          deleteButton.disabled = true;
-          try {
-            const response = await ajax({
-              method: "DELETE",
-              url: `${API_URI}/zone_record/${zr.id}`,
-            });
-
-            if (!response || response?.error) {
-              console.error("Delete zone record failed:", response);
-              alert(response?.message ?? "Delete failed. See console for details.");
-              return;
-            }
-
-            showZoneRecords(zone);
-          } catch (error) {
-            console.error("Delete zone record request failed:", error);
-            alert("Delete failed due to a network or server error.");
-          } finally {
-            deleteButton.disabled = false;
-          }
-        });
-      }
-
-      document
-        .getElementById(`zr_${zr.id}_tr`)
-        .addEventListener("click", (event) => {
-          if (event.target.closest(".zr-copy-btn, .zr-delete-btn, .zr-edit-btn")) return;
-
-          activeZoneRecordContext = { zone, zr, mode: "edit" };
-          setZoneRecordModalMode("edit");
-          editZoneRecord(zone, zr, row.asRR);
-          const modalEl = document.getElementById("zrEditModal");
-          const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-          modal.show();
-        });
-    }
-
-    const hasTableControls = response.zone_record.length > 10;
-
-    // Build merged info/length control element
-    const infoEl = document.createElement("div");
-    infoEl.className = "small text-body-secondary py-1";
-
-    let zrDt = new DataTable(table, {
-      order: [[0, "asc"], [1, "asc"]],
-      orderFixed: { pre: [[0, "asc"]] },
-      pageLength: 15,
-      lengthMenu: [15, 25, 50, 100],
-      searching: false,
-      paging: hasTableControls,
-      layout: { topStart: 'info', bottomStart: 'pageLength', topEnd: null},
-      columnDefs: [
-        { visible: false, orderable: false, searchable: false, targets: [0] },
-        { orderable: false, searchable: false, targets: [-1] },
-      ],
-    });
-    zoneRecordDataTables.set(zone.id, zrDt);
+  component.addEventListener("zr-edit", (event) => {
+    const { zone, zr } = event.detail;
+    const rrCtor = RR[zr.type];
+    const rr = rrCtor ? new rrCtor(null) : null;
+    activeZoneRecordContext = { zone, zr, mode: "edit" };
+    setZoneRecordModalMode("edit");
+    editZoneRecord(zone, zr, rr);
+    bootstrap.Modal.getOrCreateInstance(document.getElementById("zrEditModal")).show();
   });
 }
 
@@ -1585,7 +742,7 @@ function initZoneCreateActions() {
         return;
       }
       bootstrap.Modal.getOrCreateInstance(document.getElementById("zoneCreateModal")).hide();
-      zoneDataTable.ajax.reload(null, false);
+      refreshZones();
     } catch (error) {
       console.error("Create zone request failed:", error);
       alert("Create failed due to a network or server error.");
@@ -1669,7 +826,7 @@ function initZoneModalActions() {
       }
 
       bootstrap.Modal.getOrCreateInstance(document.getElementById("zoneEditModal")).hide();
-      zoneDataTable.ajax.reload(null, false);
+      refreshZones();
     } catch (error) {
       console.error("Update zone request failed:", error);
       alert("Update failed due to a network or server error.");
@@ -1706,7 +863,7 @@ function initZoneRecordModalActions() {
       const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
       modal.hide();
 
-      showZoneRecords(context.zone);
+      refreshZoneRecordsComponent();
     } catch (error) {
       console.error("Delete zone record request failed:", error);
       alert("Delete failed due to a network or server error.");
@@ -1780,7 +937,7 @@ function initZoneRecordModalActions() {
       const modalEl = document.getElementById("zrEditModal");
       const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
       modal.hide();
-      showZoneRecords(context.zone);
+      refreshZoneRecordsComponent();
     } catch (error) {
       console.error("Zone record save request failed:", error);
       alert("Save failed due to a network or server error.");

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NicTool web components — playground</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 40rem;
+        margin: 3rem auto;
+        padding: 0 1rem;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin: 1rem 0;
+      }
+      input {
+        flex: 1;
+        padding: 0.4rem 0.5rem;
+        font: inherit;
+      }
+    </style>
+    <script type="module" src="/src/main.js"></script>
+  </head>
+  <body>
+    <h1>&lt;nt-dsn-status&gt;</h1>
+    <p>Type a MySQL DSN; the pill probes the server and lights up.</p>
+    <div class="row">
+      <input
+        id="dsn"
+        placeholder="mysql://user:pass@127.0.0.1:3306/nictool"
+        autocomplete="off"
+      />
+      <nt-dsn-status id="status"></nt-dsn-status>
+    </div>
+
+    <script type="module">
+      const input = document.getElementById('dsn')
+      const status = document.getElementById('status')
+      input.addEventListener('input', () => {
+        status.dsn = input.value.trim()
+      })
+    </script>
+  </body>
+</html>
