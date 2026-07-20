@@ -42,6 +42,9 @@ async function setupApp(page, store) {
     json(r, { user: { id: 1, username: 'admin' }, group: { id: 1, name: 'Test' } }),
   )
   await page.route(/\/api\/group\?/, (r) => json(r, { group: [] }))
+  await page.route(/\/api\/group\/\d+/, (r) =>
+    json(r, { group: { id: 1, name: 'Test', parent_gid: 0 } }),
+  )
   await page.route(/\/api\/nameserver/, (r) => json(r, { nameserver: [] }))
   await page.route(/\/api\/user(\?|$)/, (r) => json(r, { user: [] }))
   await page.route(/\/api\/zone\/\d+\/ns/, (r) => json(r, { ns: [] }))
@@ -74,6 +77,15 @@ test.describe('zone table', () => {
     await setupApp(page, makeStore(120))
     await expect(page.locator('#zoneTable tbody tr.zone-row')).toHaveCount(50)
     await expect(page.getByText('Page 1 of 3')).toBeVisible()
+  })
+
+  test('shows a filtered-from-total summary when searching', async ({ page }) => {
+    await setupApp(page, makeStore(120))
+    await expect(page.getByText('Showing 1 to 50 of 120 entries')).toBeVisible()
+
+    await page.locator('#zoneTable input[type="search"]').fill('z05')
+    await expect(page.getByText('Showing 1 to 10 of 10 entries')).toBeVisible()
+    await expect(page.getByText('(filtered from 120 total entries)')).toBeVisible()
   })
 
   test('paginates to the next page', async ({ page }) => {

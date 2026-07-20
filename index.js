@@ -109,7 +109,8 @@ async function serveFile(res, relPath) {
   const ext = path.extname(relPath)
   const contentType = MIME[ext] ?? 'application/octet-stream'
   const content = await fs.readFile(path.join(__dirname, relPath), 'utf8')
-  respond(res, 200, contentType, content)
+  res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'no-cache' })
+  res.end(content)
 }
 
 async function serveStatic(req, res, rootDir, urlPrefix) {
@@ -124,9 +125,19 @@ async function serveStatic(req, res, rootDir, urlPrefix) {
   }
 
   try {
-    const content = await fs.readFile(filePath)
+    // Fixed-name bundles (dist/app.js) change contents on every build, so force
+    // the browser to revalidate rather than serve a stale cached copy — a stale
+    // app.js was silently dropping the auth token and 401-ing every API call.
+    const stat = await fs.stat(filePath)
+    const etag = `W/"${stat.size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`
     const contentType = MIME[path.extname(filePath)] ?? 'application/octet-stream'
-    res.writeHead(200, { 'Content-Type': contentType })
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' })
+      res.end()
+      return
+    }
+    const content = await fs.readFile(filePath)
+    res.writeHead(200, { 'Content-Type': contentType, ETag: etag, 'Cache-Control': 'no-cache' })
     res.end(content)
   } catch (err) {
     if (err.code === 'ENOENT') {

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
@@ -6,9 +6,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="NicTool Client UI" />
     <title>NicTool v3</title>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
+      crossorigin="anonymous"
+    ></script>
     <script type="module" src="/dist/app.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+      integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
+      crossorigin="anonymous"
+    />
     <link rel="stylesheet" href="/css/styles.css" />
   </head>
 
@@ -54,7 +63,9 @@
               role="tab"
               aria-controls="zones_div"
               aria-selected="true"
-            >Zones</button>
+            >
+              Zones
+            </button>
           </li>
           <li class="nav-item" role="presentation">
             <button
@@ -66,7 +77,9 @@
               role="tab"
               aria-controls="nameservers_div"
               aria-selected="false"
-            >Nameservers</button>
+            >
+              Nameservers
+            </button>
           </li>
           <li class="nav-item" role="presentation">
             <button
@@ -78,28 +91,13 @@
               role="tab"
               aria-controls="users_div"
               aria-selected="false"
-            >Users</button>
+            >
+              Users
+            </button>
           </li>
         </ul>
 
         <ul class="navbar-nav gap-3">
-          <li class="navbar-item dropdown">
-            <a
-              id="group_dropdown_label"
-              class="nav-link dropdown-toggle"
-              href="#"
-              role="button"
-              data-bs-toggle="dropdown"
-              aria-expanded="false"
-              >Group</a
-            >
-            <ul id="group_dropdown_menu" class="dropdown-menu"></ul>
-          </li>
-
-          <li class="navbar-item">
-            <a class="nav-link" href="/configure.html" title="Server configuration">&#9881;</a>
-          </li>
-
           <li class="navbar-item dropdown">
             <a
               class="nav-link dropdown-toggle"
@@ -111,6 +109,14 @@
             >
             <ul class="dropdown-menu dropdown-menu-end">
               <li><a class="dropdown-item" href="#" id="profileMenuItem">Profile</a></li>
+              <li>
+                <a
+                  class="dropdown-item"
+                  href="/configure.html"
+                  title="Server configuration"
+                  >&#9881; Configure server</a
+                >
+              </li>
               <li><hr class="dropdown-divider" /></li>
               <li>
                 <div class="px-3 py-2">
@@ -129,11 +135,7 @@
               </li>
               <li><hr class="dropdown-divider" /></li>
               <li>
-                <a
-                  id="logout_button"
-                  class="dropdown-item"
-                  href="#"
-                  type="button"
+                <a id="logout_button" class="dropdown-item" href="#" type="button"
                   >Logout</a
                 >
               </li>
@@ -181,8 +183,8 @@
             />
             <label for="password" class="form-label">Password</label>
             <div id="password-constraints" style="font-size: 0.7em">
-              Minimums: 8 characters, 2 lower case, 2 upper case, 2 symbols, and
-              2 numbers.
+              Minimums: 8 characters, 2 lower case, 2 upper case, 2 symbols, and 2
+              numbers.
             </div>
           </div>
           <div class="form-floating mb-3 text-center">
@@ -192,17 +194,35 @@
       </div>
 
       <div id="loggedInMain" style="display: none">
-        <div class="tab-content p-2">
-          <div id="zones_div" class="tab-pane fade show active" role="tabpanel" aria-labelledby="tab-zones">
-            <nt-zone-table id="zoneTable"></nt-zone-table>
-          </div>
+        <div class="d-flex align-items-stretch">
+          <nt-group-nav id="groupNav"></nt-group-nav>
+          <div class="tab-content p-2 flex-grow-1" style="min-width: 0">
+            <div
+              id="zones_div"
+              class="tab-pane fade show active"
+              role="tabpanel"
+              aria-labelledby="tab-zones"
+            >
+              <nt-zone-table id="zoneTable"></nt-zone-table>
+            </div>
 
-          <div id="nameservers_div" class="tab-pane fade" role="tabpanel" aria-labelledby="tab-nameservers">
-            <nt-ns-table id="nsTable"></nt-ns-table>
-          </div>
+            <div
+              id="nameservers_div"
+              class="tab-pane fade"
+              role="tabpanel"
+              aria-labelledby="tab-nameservers"
+            >
+              <nt-ns-table id="nsTable"></nt-ns-table>
+            </div>
 
-          <div id="users_div" class="tab-pane fade" role="tabpanel" aria-labelledby="tab-users">
-            <nt-user-table id="userTable"></nt-user-table>
+            <div
+              id="users_div"
+              class="tab-pane fade"
+              role="tabpanel"
+              aria-labelledby="tab-users"
+            >
+              <nt-user-table id="userTable"></nt-user-table>
+            </div>
           </div>
         </div>
       </div>
@@ -244,72 +264,136 @@
         <div class="modal-content">
           <div class="modal-header">
             <h1 class="modal-title fs-5" id="zoneCreateModalLabel">Create Zone</h1>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
           </div>
           <div class="modal-body">
             <div class="container-fluid">
               <div class="mb-3 row">
                 <div class="form-floating col-md-12">
-                  <input type="text" class="form-control form-control-sm" id="zoneCreateZone" placeholder="example.com." />
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    id="zoneCreateZone"
+                    placeholder="example.com."
+                  />
                   <label for="zoneCreateZone" class="form-label ms-2">Zone name</label>
                 </div>
               </div>
               <div class="mb-3 row">
                 <div class="form-floating col-md-12">
-                  <input type="text" class="form-control form-control-sm" id="zoneCreateDescription" placeholder="Description" />
-                  <label for="zoneCreateDescription" class="form-label ms-2">Description</label>
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    id="zoneCreateDescription"
+                    placeholder="Description"
+                  />
+                  <label for="zoneCreateDescription" class="form-label ms-2"
+                    >Description</label
+                  >
                 </div>
               </div>
               <div class="mb-3 row">
                 <div class="form-floating col-md-12">
-                  <input type="text" class="form-control form-control-sm" id="zoneCreateMailaddr" placeholder="hostmaster" />
-                  <label for="zoneCreateMailaddr" class="form-label ms-2">Hostmaster (mailaddr)</label>
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    id="zoneCreateMailaddr"
+                    placeholder="hostmaster"
+                  />
+                  <label for="zoneCreateMailaddr" class="form-label ms-2"
+                    >Hostmaster (mailaddr)</label
+                  >
                 </div>
               </div>
               <div class="mb-3 row">
                 <div class="col-md-6">
                   <div class="form-floating">
-                    <input type="text" class="form-control form-control-sm" id="zoneCreateTtl" placeholder="86400" />
+                    <input
+                      type="text"
+                      class="form-control form-control-sm"
+                      id="zoneCreateTtl"
+                      placeholder="86400"
+                    />
                     <label for="zoneCreateTtl" class="form-label ms-2">Default TTL</label>
                   </div>
                   <small class="form-text text-muted" id="zoneCreateTtlDisplay"></small>
                 </div>
                 <div class="col-md-6">
                   <div class="form-floating">
-                    <input type="text" class="form-control form-control-sm" id="zoneCreateMinimum" placeholder="2560" />
-                    <label for="zoneCreateMinimum" class="form-label ms-2">Minimum (negative TTL)</label>
+                    <input
+                      type="text"
+                      class="form-control form-control-sm"
+                      id="zoneCreateMinimum"
+                      placeholder="2560"
+                    />
+                    <label for="zoneCreateMinimum" class="form-label ms-2"
+                      >Minimum (negative TTL)</label
+                    >
                   </div>
-                  <small class="form-text text-muted" id="zoneCreateMinimumDisplay"></small>
+                  <small
+                    class="form-text text-muted"
+                    id="zoneCreateMinimumDisplay"
+                  ></small>
                 </div>
               </div>
               <div class="mb-3 row">
                 <div class="col-md-4">
                   <div class="form-floating">
-                    <input type="text" class="form-control form-control-sm" id="zoneCreateRefresh" placeholder="16384" />
+                    <input
+                      type="text"
+                      class="form-control form-control-sm"
+                      id="zoneCreateRefresh"
+                      placeholder="16384"
+                    />
                     <label for="zoneCreateRefresh" class="form-label ms-2">Refresh</label>
                   </div>
-                  <small class="form-text text-muted" id="zoneCreateRefreshDisplay"></small>
+                  <small
+                    class="form-text text-muted"
+                    id="zoneCreateRefreshDisplay"
+                  ></small>
                 </div>
                 <div class="col-md-4">
                   <div class="form-floating">
-                    <input type="text" class="form-control form-control-sm" id="zoneCreateRetry" placeholder="900" />
+                    <input
+                      type="text"
+                      class="form-control form-control-sm"
+                      id="zoneCreateRetry"
+                      placeholder="900"
+                    />
                     <label for="zoneCreateRetry" class="form-label ms-2">Retry</label>
                   </div>
                   <small class="form-text text-muted" id="zoneCreateRetryDisplay"></small>
                 </div>
                 <div class="col-md-4">
                   <div class="form-floating">
-                    <input type="text" class="form-control form-control-sm" id="zoneCreateExpire" placeholder="1048576" />
+                    <input
+                      type="text"
+                      class="form-control form-control-sm"
+                      id="zoneCreateExpire"
+                      placeholder="1048576"
+                    />
                     <label for="zoneCreateExpire" class="form-label ms-2">Expire</label>
                   </div>
-                  <small class="form-text text-muted" id="zoneCreateExpireDisplay"></small>
+                  <small
+                    class="form-text text-muted"
+                    id="zoneCreateExpireDisplay"
+                  ></small>
                 </div>
               </div>
             </div>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button id="zoneCreateSaveButton" type="button" class="btn btn-primary">Create</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+              Cancel
+            </button>
+            <button id="zoneCreateSaveButton" type="button" class="btn btn-primary">
+              Create
+            </button>
           </div>
         </div>
       </div>
@@ -326,34 +410,63 @@
         <div class="modal-content">
           <div class="modal-header">
             <h1 class="modal-title fs-5" id="zoneEditModalLabel">Edit Zone</h1>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
           </div>
           <div class="modal-body">
             <div class="container-fluid">
               <div class="mb-3 row">
                 <div class="form-floating col-md-12">
-                  <input type="text" class="form-control form-control-sm" id="zoneEditName" readonly />
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    id="zoneEditName"
+                    readonly
+                  />
                   <label for="zoneEditName" class="form-label ms-2">Zone</label>
                 </div>
               </div>
               <div class="mb-3 row">
                 <div class="form-floating col-md-12">
-                  <input type="text" class="form-control form-control-sm" id="zoneEditMailaddr" placeholder="hostmaster" />
-                  <label for="zoneEditMailaddr" class="form-label ms-2">Hostmaster (mailaddr)</label>
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    id="zoneEditMailaddr"
+                    placeholder="hostmaster"
+                  />
+                  <label for="zoneEditMailaddr" class="form-label ms-2"
+                    >Hostmaster (mailaddr)</label
+                  >
                 </div>
               </div>
               <div class="mb-3 row">
                 <div class="col-md-6">
                   <div class="form-floating">
-                    <input type="text" class="form-control form-control-sm" id="zoneEditTtl" placeholder="86400" />
+                    <input
+                      type="text"
+                      class="form-control form-control-sm"
+                      id="zoneEditTtl"
+                      placeholder="86400"
+                    />
                     <label for="zoneEditTtl" class="form-label ms-2">Default TTL</label>
                   </div>
                   <small class="form-text text-muted" id="zoneEditTtlDisplay"></small>
                 </div>
                 <div class="col-md-6">
                   <div class="form-floating">
-                    <input type="text" class="form-control form-control-sm" id="zoneEditMinimum" placeholder="2560" />
-                    <label for="zoneEditMinimum" class="form-label ms-2">Minimum (negative TTL)</label>
+                    <input
+                      type="text"
+                      class="form-control form-control-sm"
+                      id="zoneEditMinimum"
+                      placeholder="2560"
+                    />
+                    <label for="zoneEditMinimum" class="form-label ms-2"
+                      >Minimum (negative TTL)</label
+                    >
                   </div>
                   <small class="form-text text-muted" id="zoneEditMinimumDisplay"></small>
                 </div>
@@ -361,21 +474,36 @@
               <div class="mb-3 row">
                 <div class="col-md-4">
                   <div class="form-floating">
-                    <input type="text" class="form-control form-control-sm" id="zoneEditRefresh" placeholder="16384" />
+                    <input
+                      type="text"
+                      class="form-control form-control-sm"
+                      id="zoneEditRefresh"
+                      placeholder="16384"
+                    />
                     <label for="zoneEditRefresh" class="form-label ms-2">Refresh</label>
                   </div>
                   <small class="form-text text-muted" id="zoneEditRefreshDisplay"></small>
                 </div>
                 <div class="col-md-4">
                   <div class="form-floating">
-                    <input type="text" class="form-control form-control-sm" id="zoneEditRetry" placeholder="900" />
+                    <input
+                      type="text"
+                      class="form-control form-control-sm"
+                      id="zoneEditRetry"
+                      placeholder="900"
+                    />
                     <label for="zoneEditRetry" class="form-label ms-2">Retry</label>
                   </div>
                   <small class="form-text text-muted" id="zoneEditRetryDisplay"></small>
                 </div>
                 <div class="col-md-4">
                   <div class="form-floating">
-                    <input type="text" class="form-control form-control-sm" id="zoneEditExpire" placeholder="1048576" />
+                    <input
+                      type="text"
+                      class="form-control form-control-sm"
+                      id="zoneEditExpire"
+                      placeholder="1048576"
+                    />
                     <label for="zoneEditExpire" class="form-label ms-2">Expire</label>
                   </div>
                   <small class="form-text text-muted" id="zoneEditExpireDisplay"></small>
@@ -383,14 +511,26 @@
               </div>
             </div>
           </div>
-          <div class="modal-footer" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+          <div
+            class="modal-footer"
+            style="flex-direction: column; align-items: stretch; gap: 0.5rem"
+          >
             <div class="form-floating w-100">
-              <input type="text" class="form-control form-control-sm" id="zoneEditDescription" placeholder="Description" />
+              <input
+                type="text"
+                class="form-control form-control-sm"
+                id="zoneEditDescription"
+                placeholder="Description"
+              />
               <label for="zoneEditDescription" class="form-label ms-2">Description</label>
             </div>
             <div class="d-flex justify-content-end gap-2 w-100">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-              <button id="zoneEditSaveButton" type="button" class="btn btn-primary">Save</button>
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                Cancel
+              </button>
+              <button id="zoneEditSaveButton" type="button" class="btn btn-primary">
+                Save
+              </button>
             </div>
           </div>
         </div>
@@ -407,9 +547,7 @@
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
-            <h1 class="modal-title fs-5" id="zrEditModalLabel">
-              Edit Resource Record
-            </h1>
+            <h1 class="modal-title fs-5" id="zrEditModalLabel">Edit Resource Record</h1>
             <button
               type="button"
               class="btn-close"
@@ -447,10 +585,7 @@
                   ></select>
                   <label for="zrEditType" class="form-label ms-2">Type</label>
                 </div>
-                <div
-                  id="zrEditTypeRFCs"
-                  class="form-text col-md-5 mt-auto"
-                ></div>
+                <div id="zrEditTypeRFCs" class="form-text col-md-5 mt-auto"></div>
                 <div id="zrEditTypeHelp" class="form-text col mt-auto"></div>
               </div>
               <div class="mb-3 row">
@@ -471,8 +606,15 @@
               <div id="zrEditRdata" class="mb-3 col-md-12 mt-auto"></div>
               <div class="mb-3 row">
                 <div class="form-floating col-md-12">
-                  <input type="text" class="form-control form-control-sm" id="zrEditDescription" placeholder="Optional note" />
-                  <label for="zrEditDescription" class="form-label ms-2">Description</label>
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    id="zrEditDescription"
+                    placeholder="Optional note"
+                  />
+                  <label for="zrEditDescription" class="form-label ms-2"
+                    >Description</label
+                  >
                 </div>
               </div>
             </div>
@@ -509,106 +651,209 @@
 
     <!-- User create/edit pane -->
     <div
-      class="offcanvas offcanvas-end"
+      class="modal fade"
       tabindex="-1"
       id="userEditPane"
       aria-labelledby="userEditPaneLabel"
-      style="width: 380px;"
+      aria-hidden="true"
     >
-      <div class="offcanvas-header border-bottom">
-        <h5 class="offcanvas-title" id="userEditPaneLabel">User</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-      </div>
-      <div class="offcanvas-body">
-        <div class="form-floating mb-3">
-          <input type="text" class="form-control" id="userEditUsername" placeholder="jsmith" />
-          <label for="userEditUsername">Username</label>
-        </div>
-        <div class="form-floating mb-3">
-          <input type="text" class="form-control" id="userEditFirstName" placeholder="Jane" />
-          <label for="userEditFirstName">First Name</label>
-        </div>
-        <div class="form-floating mb-3">
-          <input type="text" class="form-control" id="userEditLastName" placeholder="Smith" />
-          <label for="userEditLastName">Last Name</label>
-        </div>
-        <div class="form-floating mb-3">
-          <input type="email" class="form-control" id="userEditEmail" placeholder="jane@example.com" />
-          <label for="userEditEmail">Email</label>
-        </div>
-        <div class="form-floating mb-2">
-          <input type="password" class="form-control" id="userEditPassword" placeholder="Password" autocomplete="new-password" />
-          <label for="userEditPassword">Password <span class="small text-body-secondary">(leave blank to keep current)</span></label>
-        </div>
-        <div id="userPasswordHints" class="d-none mb-3 small ps-1">
-          <div id="pwHintLength"   data-msg="At least 8 characters"                 class="text-danger">✗ At least 8 characters</div>
-          <div id="pwHintUpper"    data-msg="2 uppercase letters"                   class="text-danger">✗ 2 uppercase letters</div>
-          <div id="pwHintLower"    data-msg="2 lowercase letters"                   class="text-danger">✗ 2 lowercase letters</div>
-          <div id="pwHintNumber"   data-msg="2 numbers"                             class="text-danger">✗ 2 numbers</div>
-          <div id="pwHintSpecial"  data-msg="2 special characters"                  class="text-danger">✗ 2 special characters</div>
-          <div id="pwHintBanned"   data-msg="Does not contain: abc, 123, asdf, password" class="text-danger">✗ Does not contain: abc, 123, asdf, password</div>
-        </div>
-        <div class="form-check form-switch mb-3">
-          <input class="form-check-input" type="checkbox" role="switch" id="userEditIsAdmin" />
-          <label class="form-check-label" for="userEditIsAdmin">Administrator</label>
-        </div>
-        <div class="d-flex justify-content-end gap-2 mt-4">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="offcanvas">Cancel</button>
-          <button type="button" class="btn btn-primary" id="userEditSaveBtn">Save</button>
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="userEditPaneLabel">User</h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body">
+            <div class="form-floating mb-3">
+              <input
+                type="text"
+                class="form-control"
+                id="userEditUsername"
+                placeholder="jsmith"
+              />
+              <label for="userEditUsername">Username</label>
+            </div>
+            <div class="form-floating mb-3">
+              <input
+                type="text"
+                class="form-control"
+                id="userEditFirstName"
+                placeholder="Jane"
+              />
+              <label for="userEditFirstName">First Name</label>
+            </div>
+            <div class="form-floating mb-3">
+              <input
+                type="text"
+                class="form-control"
+                id="userEditLastName"
+                placeholder="Smith"
+              />
+              <label for="userEditLastName">Last Name</label>
+            </div>
+            <div class="form-floating mb-3">
+              <input
+                type="email"
+                class="form-control"
+                id="userEditEmail"
+                placeholder="jane@example.com"
+              />
+              <label for="userEditEmail">Email</label>
+            </div>
+            <div class="form-floating mb-2">
+              <input
+                type="password"
+                class="form-control"
+                id="userEditPassword"
+                placeholder="Password"
+                autocomplete="new-password"
+              />
+              <label for="userEditPassword"
+                >Password
+                <span class="small text-body-secondary"
+                  >(leave blank to keep current)</span
+                ></label
+              >
+            </div>
+            <div id="userPasswordHints" class="d-none mb-3 small ps-1">
+              <div id="pwHintLength" data-msg="At least 8 characters" class="text-danger">
+                ✗ At least 8 characters
+              </div>
+              <div id="pwHintUpper" data-msg="2 uppercase letters" class="text-danger">
+                ✗ 2 uppercase letters
+              </div>
+              <div id="pwHintLower" data-msg="2 lowercase letters" class="text-danger">
+                ✗ 2 lowercase letters
+              </div>
+              <div id="pwHintNumber" data-msg="2 numbers" class="text-danger">
+                ✗ 2 numbers
+              </div>
+              <div id="pwHintSpecial" data-msg="2 special characters" class="text-danger">
+                ✗ 2 special characters
+              </div>
+              <div
+                id="pwHintBanned"
+                data-msg="Does not contain: abc, 123, asdf, password"
+                class="text-danger"
+              >
+                ✗ Does not contain: abc, 123, asdf, password
+              </div>
+            </div>
+            <div class="form-check form-switch mb-3">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                role="switch"
+                id="userEditIsAdmin"
+              />
+              <label class="form-check-label" for="userEditIsAdmin">Administrator</label>
+            </div>
+            <div class="d-flex justify-content-end gap-2 mt-4">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                Cancel
+              </button>
+              <button type="button" class="btn btn-primary" id="userEditSaveBtn">
+                Save
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Nameserver create/edit pane -->
     <div
-      class="offcanvas offcanvas-end"
+      class="modal fade"
       tabindex="-1"
       id="nsEditPane"
       aria-labelledby="nsEditPaneLabel"
-      style="width: 380px;"
+      aria-hidden="true"
     >
-      <div class="offcanvas-header border-bottom">
-        <h5 class="offcanvas-title" id="nsEditPaneLabel">Nameserver</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-      </div>
-      <div class="offcanvas-body">
-        <div class="form-floating mb-3">
-          <input type="text" class="form-control" id="nsEditName" placeholder="ns1.example.com" />
-          <label for="nsEditName">Name</label>
-        </div>
-        <div class="form-floating mb-3">
-          <input type="number" class="form-control" id="nsEditTtl" placeholder="86400" min="0" />
-          <label for="nsEditTtl">TTL (seconds)</label>
-        </div>
-        <div class="form-floating mb-3">
-          <input type="text" class="form-control" id="nsEditAddress" placeholder="192.0.2.1" />
-          <label for="nsEditAddress">IPv4 Address</label>
-        </div>
-        <div class="form-floating mb-3">
-          <input type="text" class="form-control" id="nsEditAddress6" placeholder="2001:db8::1" />
-          <label for="nsEditAddress6">IPv6 Address</label>
-        </div>
-        <div class="form-floating mb-3">
-          <select class="form-select" id="nsEditExportType">
-            <option value="bind">bind</option>
-            <option value="nsd">nsd</option>
-            <option value="knot">knot</option>
-            <option value="djbdns">djbdns</option>
-            <option value="maradns">maradns</option>
-            <option value="powerdns">powerdns</option>
-          </select>
-          <label for="nsEditExportType">Export Format</label>
-        </div>
-        <div class="form-floating mb-3">
-          <input type="text" class="form-control" id="nsEditDescription" placeholder="Description" />
-          <label for="nsEditDescription">Description</label>
-        </div>
-        <div class="d-flex justify-content-end gap-2 mt-4">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="offcanvas">Cancel</button>
-          <button type="button" class="btn btn-primary" id="nsEditSaveBtn">Save</button>
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="nsEditPaneLabel">Nameserver</h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body">
+            <div class="form-floating mb-3">
+              <input
+                type="text"
+                class="form-control"
+                id="nsEditName"
+                placeholder="ns1.example.com"
+              />
+              <label for="nsEditName">Name</label>
+            </div>
+            <div class="form-floating mb-3">
+              <input
+                type="number"
+                class="form-control"
+                id="nsEditTtl"
+                placeholder="86400"
+                min="0"
+              />
+              <label for="nsEditTtl">TTL (seconds)</label>
+            </div>
+            <div class="form-floating mb-3">
+              <input
+                type="text"
+                class="form-control"
+                id="nsEditAddress"
+                placeholder="192.0.2.1"
+              />
+              <label for="nsEditAddress">IPv4 Address</label>
+            </div>
+            <div class="form-floating mb-3">
+              <input
+                type="text"
+                class="form-control"
+                id="nsEditAddress6"
+                placeholder="2001:db8::1"
+              />
+              <label for="nsEditAddress6">IPv6 Address</label>
+            </div>
+            <div class="form-floating mb-3">
+              <select class="form-select" id="nsEditExportType">
+                <option value="bind">bind</option>
+                <option value="nsd">nsd</option>
+                <option value="knot">knot</option>
+                <option value="djbdns">djbdns</option>
+                <option value="maradns">maradns</option>
+                <option value="powerdns">powerdns</option>
+              </select>
+              <label for="nsEditExportType">Export Format</label>
+            </div>
+            <div class="form-floating mb-3">
+              <input
+                type="text"
+                class="form-control"
+                id="nsEditDescription"
+                placeholder="Description"
+              />
+              <label for="nsEditDescription">Description</label>
+            </div>
+            <div class="d-flex justify-content-end gap-2 mt-4">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                Cancel
+              </button>
+              <button type="button" class="btn btn-primary" id="nsEditSaveBtn">
+                Save
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
-
   </body>
 </html>

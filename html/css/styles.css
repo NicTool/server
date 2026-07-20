@@ -1,4 +1,8 @@
 /* Group dropdown hover submenu (springs to the left) */
+html {
+  font-size: 0.9rem;
+}
+
 #group_dropdown_menu li.has-submenu {
   position: relative;
 }
@@ -17,4 +21,56 @@
 
 #group_dropdown_menu li.has-submenu:hover .group-submenu {
   display: block;
+}
+
+/* ---- Object tables (Lit components) — compact styling ---- */
+#zoneTable td,
+#zoneRecordsComponent td,
+#nsTable td,
+#userTable td {
+  padding-top: 0.2rem;
+  padding-bottom: 0.2rem;
+}
+
+#zoneTable thead th,
+#zoneRecordsComponent thead th,
+#nsTable thead th,
+#userTable thead th {
+  color: var(--bs-secondary-color);
+  font-weight: 600;
+}
+
+/* Synthetic SOA/NS rows — near-minimum row height */
+.zone-record-soa td,
+.zone-record-synthetic td {
+  font-size: 0.7rem !important;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  line-height: 1.15;
+}
+
+/* ---- Group sidebar nav ---- */
+.nt-group-nav {
+  min-height: calc(100vh - 3.5rem);
+}
+.nt-group-nav .nt-group-row {
+  border-radius: 0.25rem;
+  padding-top: 0.1rem;
+  padding-bottom: 0.1rem;
+}
+.nt-group-nav .nt-group-row:hover {
+  background-color: var(--bs-tertiary-bg);
+}
+.nt-group-nav .nt-group-row.active {
+  background-color: rgba(13, 110, 253, 0.12);
+}
+.nt-group-nav .nt-group-link {
+  padding: 0.05rem 0.25rem;
+}
+.nt-group-nav .nt-group-caret {
+  width: 1rem;
+  line-height: 1;
+}
+.nt-group-collapsed:hover {
+  background-color: var(--bs-tertiary-bg);
 }

@@ -13,6 +13,7 @@ import { parseHumanTime, secondsToHuman } from "./lib/time.js";
 import { normalizeOwnerForZone } from "./lib/zone-name.js";
 import "./components/zone-records.js";
 import "./components/zone-table.js";
+import "./components/group-nav.js";
 import "./components/ns-table.js";
 import "./components/user-table.js";
 
@@ -39,7 +40,6 @@ function initDangerousModeToggle() {
 
 let currentGroupId = null;
 let rootGroupId = null;
-let groupHistory = []; // stack of { id, name } for breadcrumb navigation
 let zoneDefaults = { ttl: 86400, refresh: 16384, retry: 900, expire: 1048576, minimum: 2560 };
 
 function attachTimeField(inputId, displayId) {
@@ -166,6 +166,7 @@ function onLoad() {
   populateZrEditType();
   initZoneRecordModalActions();
   initZoneTable();
+  initGroupNav();
   initZoneRecordsComponent();
   initDangerousModeToggle();
   initNsControls();
@@ -205,79 +206,24 @@ function onLoad() {
     });
 }
 
-async function loadGroupMenu(gid, name) {
-  const groupMenu = document.getElementById("group_dropdown_menu");
-  if (!groupMenu) return;
-
-  groupMenu.innerHTML = "";
-
-  if (groupHistory.length > 0) {
-    const parent = groupHistory[groupHistory.length - 1];
-    const backLi = document.createElement("li");
-    backLi.innerHTML = `<a class="dropdown-item text-secondary small" href="#" data-group-back="true">← ${escapeHtml(parent.name)}</a>`;
-    groupMenu.appendChild(backLi);
-    const sep = document.createElement("li");
-    sep.innerHTML = '<hr class="dropdown-divider my-1">';
-    groupMenu.appendChild(sep);
-  }
-
-  const currentLi = document.createElement("li");
-  currentLi.innerHTML = `<a class="dropdown-item active" href="#" data-group-id="${gid}">${escapeHtml(name)}</a>`;
-  groupMenu.appendChild(currentLi);
-
-  try {
-    const res = await ajax({ method: "GET", url: `${API_URI}/group?parent_gid=${gid}` });
-    const subgroups = res?.group ?? [];
-    if (subgroups.length === 0) return;
-
-    const divider = document.createElement("li");
-    divider.innerHTML = '<hr class="dropdown-divider my-1">';
-    groupMenu.appendChild(divider);
-
-    // Fetch sub-subgroups in parallel to know which items have children
-    const childResults = await Promise.all(
-      subgroups.map(g =>
-        ajax({ method: "GET", url: `${API_URI}/group?parent_gid=${g.id}` })
-          .then(r => ({ id: g.id, children: r?.group ?? [] }))
-          .catch(() => ({ id: g.id, children: [] }))
-      )
-    );
-    const childrenMap = new Map(childResults.map(s => [s.id, s.children]));
-
-    for (const g of subgroups) {
-      const children = childrenMap.get(g.id) ?? [];
-      const hasChildren = children.length > 0;
-      const li = document.createElement("li");
-
-      if (hasChildren) {
-        li.className = "has-submenu";
-        li.innerHTML = `<a class="dropdown-item" href="#" data-group-id="${g.id}" data-group-name="${escapeHtml(g.name)}"><span class="text-body-tertiary me-2">▸</span>${escapeHtml(g.name)}</a>`;
-        const submenu = document.createElement("ul");
-        submenu.className = "group-submenu dropdown-menu";
-        for (const c of children) {
-          const cLi = document.createElement("li");
-          cLi.innerHTML = `<a class="dropdown-item" href="#" data-group-id="${c.id}" data-group-name="${escapeHtml(c.name)}" data-group-parent-id="${g.id}" data-group-parent-name="${escapeHtml(g.name)}">${escapeHtml(c.name)}</a>`;
-          submenu.appendChild(cLi);
-        }
-        li.appendChild(submenu);
-      } else {
-        li.innerHTML = `<a class="dropdown-item" href="#" data-group-id="${g.id}" data-group-name="${escapeHtml(g.name)}"><span class="invisible me-2">▸</span>${escapeHtml(g.name)}</a>`;
-      }
-      groupMenu.appendChild(li);
-    }
-  } catch (err) {
-    console.error("Failed to load group menu:", err);
-  }
-}
-
 function switchGroup(gid, name) {
   currentGroupId = gid;
-  const groupLabel = document.getElementById("group_dropdown_label");
-  if (groupLabel) groupLabel.textContent = name;
-  loadGroupMenu(gid, name);
+  const groupNav = document.getElementById("groupNav");
+  if (groupNav) groupNav.currentGid = gid;
   showZones();
   showNameservers();
   showUsers();
+}
+
+function initGroupNav() {
+  const groupNav = document.getElementById("groupNav");
+  if (!groupNav || groupNav.dataset.initialized === "true") return;
+  groupNav.dataset.initialized = "true";
+  groupNav.addEventListener("group-select", (event) => {
+    const { id, name } = event.detail;
+    if (id === currentGroupId) return;
+    switchGroup(id, name);
+  });
 }
 
 function onLoggedIn(response) {
@@ -288,51 +234,12 @@ function onLoggedIn(response) {
   currentUser = response.user ?? null;
   currentGroupId = response.group?.id ?? null;
   rootGroupId = currentGroupId;
-  groupHistory = [];
 
-  const groupLabel = document.getElementById("group_dropdown_label");
-  const groupMenu = document.getElementById("group_dropdown_menu");
-  if (groupLabel && groupMenu) {
-    groupLabel.textContent = response.group?.name ?? "Group";
-
-    if (!groupMenu.dataset.clickInitialized) {
-      groupMenu.dataset.clickInitialized = "true";
-      groupMenu.addEventListener("click", (e) => {
-        const a = e.target.closest("a[data-group-id], a[data-group-back]");
-        if (!a) return;
-        e.preventDefault();
-
-        if (a.dataset.groupBack) {
-          const prev = groupHistory.pop();
-          if (!prev) return;
-          currentGroupId = prev.id;
-          if (groupLabel) groupLabel.textContent = prev.name;
-          loadGroupMenu(prev.id, prev.name);
-          showZones();
-          showNameservers();
-          showUsers();
-          return;
-        }
-
-        const gid = parseInt(a.dataset.groupId, 10);
-        const label = a.dataset.groupName || a.textContent.replace("▸", "").trim();
-
-        if (a.dataset.groupParentId) {
-          // Submenu item — push current group AND intermediate parent to history
-          const parentId = parseInt(a.dataset.groupParentId, 10);
-          const parentName = a.dataset.groupParentName ?? "";
-          groupHistory.push({ id: currentGroupId, name: groupLabel.textContent });
-          groupHistory.push({ id: parentId, name: parentName });
-          switchGroup(gid, label);
-        } else {
-          if (gid === currentGroupId) return;
-          groupHistory.push({ id: currentGroupId, name: groupLabel.textContent });
-          switchGroup(gid, label);
-        }
-      });
-    }
-
-    if (currentGroupId) loadGroupMenu(currentGroupId, response.group?.name ?? "Group");
+  const groupNav = document.getElementById("groupNav");
+  if (groupNav) {
+    groupNav.token = Cookie.get("nt-token");
+    groupNav.rootGid = currentGroupId;
+    groupNav.currentGid = currentGroupId;
   }
 
   fetch("/nt/config")
@@ -349,13 +256,6 @@ function onLoggedIn(response) {
 
 function onLoggedOut() {
   document.getElementById("loggedInMain").style.display = "none";
-  const groupLabel = document.getElementById("group_dropdown_label");
-  const groupMenu = document.getElementById("group_dropdown_menu");
-  if (groupLabel) groupLabel.textContent = "Group";
-  if (groupMenu) groupMenu.innerHTML = "";
-  // document.getElementById('groups').style.display = 'none';
-  // document.getElementById('zones').style.display = 'none';
-  // document.getElementById('nameservers').style.display = 'none';
   document.getElementById("login_div").style.display = "block";
 }
 
@@ -438,7 +338,7 @@ function openNsPane(ns) {
   document.getElementById("nsEditAddress6").value    = ns?.address6    ?? "";
   document.getElementById("nsEditExportType").value  = ns?.export?.type ?? "bind";
   document.getElementById("nsEditSaveBtn").textContent = isCreate ? "Create" : "Save";
-  bootstrap.Offcanvas.getOrCreateInstance(document.getElementById("nsEditPane")).show();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById("nsEditPane")).show();
 }
 
 function initNsControls() {
@@ -475,7 +375,7 @@ function initNsControls() {
           alert(response?.message ?? "Save failed. See console for details.");
           return;
         }
-        bootstrap.Offcanvas.getOrCreateInstance(document.getElementById("nsEditPane")).hide();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById("nsEditPane")).hide();
         showNameservers();
       } catch (err) {
         console.error("NS save failed:", err);
@@ -517,7 +417,7 @@ function openUserPane(user) {
   document.getElementById("userEditPassword").value   = "";
   document.getElementById("userEditIsAdmin").checked  = user?.is_admin   ?? false;
   document.getElementById("userEditSaveBtn").textContent = isCreate ? "Create" : "Save";
-  bootstrap.Offcanvas.getOrCreateInstance(document.getElementById("userEditPane")).show();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById("userEditPane")).show();
 }
 
 function initUserControls() {
@@ -581,7 +481,7 @@ function initUserControls() {
           alert(response?.message ?? "Save failed. See console for details.");
           return;
         }
-        bootstrap.Offcanvas.getOrCreateInstance(document.getElementById("userEditPane")).hide();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById("userEditPane")).hide();
         showUsers();
       } catch (err) {
         console.error("User save failed:", err);

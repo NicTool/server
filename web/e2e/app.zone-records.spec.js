@@ -62,6 +62,9 @@ async function setupApp(page_, store) {
     json(r, { user: { id: 1, username: 'admin' }, group: { id: 1, name: 'Test' } }),
   )
   await page_.route(/\/api\/group\?/, (r) => json(r, { group: [] }))
+  await page_.route(/\/api\/group\/\d+/, (r) =>
+    json(r, { group: { id: 1, name: 'Test', parent_gid: 0 } }),
+  )
   await page_.route(/\/api\/nameserver/, (r) => json(r, { nameserver: [] }))
   await page_.route(/\/api\/user(\?|$)/, (r) => json(r, { user: [] }))
   await page_.route(/\/api\/zone\?/, (r) =>

@@ -54,11 +54,11 @@ export function nextSort(current, column) {
   return { sortBy: column, sortDir: current.sortDir === 'asc' ? 'desc' : 'asc' }
 }
 
-/** Human "1–50 of 1,234" style range label for the current page. */
+/** DataTables-style "Showing 1 to 25 of 27 entries" label for the current page. */
 export function rangeLabel({ page, pageSize, filtered }) {
-  if (!filtered) return '0 of 0'
+  if (!filtered) return 'No entries'
   const start = (page - 1) * pageSize + 1
   const end = Math.min(filtered, page * pageSize)
   const n = (v) => v.toLocaleString('en-US')
-  return `${n(start)}–${n(end)} of ${n(filtered)}`
+  return `Showing ${n(start)} to ${n(end)} of ${n(filtered)} entries`
 }

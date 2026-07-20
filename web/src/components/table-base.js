@@ -152,8 +152,15 @@ export class NtTableBase extends LitElement {
     try {
       const res = await this._api(`${this._entityPath}/${item.id}`, { method: 'DELETE' })
       if (res?.error) throw new Error(res.message ?? 'delete failed')
-      this._stepBackIfLast()
-      await this._load()
+      // Drop the row in place so it collapses smoothly, instead of refetching
+      // the page (which reflows the table and flashes in a replacement row).
+      this._rows = this._rows.filter((r) => r.id !== item.id)
+      this._filtered = Math.max(0, this._filtered - 1)
+      this._total = Math.max(0, this._total - 1)
+      if (this._rows.length === 0 && this._page > 1) {
+        this._page -= 1
+        await this._load()
+      }
       this._showNotice(`Deleted ${this._itemLabel(item)}`, item)
     } catch {
       this._error = 'Delete failed'
@@ -221,13 +228,21 @@ export class NtTableBase extends LitElement {
   }
 
   _renderRangeLabel() {
-    return this._loading
-      ? 'Loading…'
-      : rangeLabel({
-          page: this._page,
-          pageSize: this.pageSize,
-          filtered: this._filtered,
-        })
+    if (this._loading) return 'Loading…'
+    const label = rangeLabel({
+      page: this._page,
+      pageSize: this.pageSize,
+      filtered: this._filtered,
+    })
+    if (this._filtered < this._total) {
+      const total = this._total.toLocaleString('en-US')
+      return html`${label}<span
+          class="d-block text-body-tertiary"
+          style="font-size: 0.78em"
+          >(filtered from ${total} total entries)</span
+        >`
+    }
+    return label
   }
 
   _renderPager() {

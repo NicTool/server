@@ -73,10 +73,13 @@ test('nextSort flips the active column and defaults new columns to asc', () => {
 })
 
 test('rangeLabel formats the visible slice', () => {
-  assert.equal(rangeLabel({ page: 1, pageSize: 50, filtered: 1234 }), '1–50 of 1,234')
+  assert.equal(
+    rangeLabel({ page: 1, pageSize: 50, filtered: 1234 }),
+    'Showing 1 to 50 of 1,234 entries',
+  )
   assert.equal(
     rangeLabel({ page: 25, pageSize: 50, filtered: 1234 }),
-    '1,201–1,234 of 1,234',
+    'Showing 1,201 to 1,234 of 1,234 entries',
   )
-  assert.equal(rangeLabel({ page: 1, pageSize: 50, filtered: 0 }), '0 of 0')
+  assert.equal(rangeLabel({ page: 1, pageSize: 50, filtered: 0 }), 'No entries')
 })

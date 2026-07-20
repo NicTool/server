@@ -119,6 +119,19 @@ test('paginates and sorts server-side', async () => {
   assert.equal(zoneNames(el)[0], 'z119.example.com')
 })
 
+test('range label shows a filtered-from-total summary when searching', async () => {
+  stubFetch(makeStore(120))
+  const el = await mount()
+  assert.match(el.textContent, /Showing 1 to 50 of 120 entries/)
+
+  el._search = 'z05'
+  el._page = 1
+  await el._load()
+  await el.updateComplete
+  assert.match(el.textContent, /Showing 1 to 10 of 10 entries/)
+  assert.match(el.textContent, /filtered from 120 total entries/)
+})
+
 test('searches server-side', async () => {
   stubFetch(makeStore(120))
   const el = await mount()
@@ -133,12 +146,7 @@ test('clicking a zone emits zone-open-records; action buttons emit their events'
   stubFetch(makeStore(3))
   const el = await mount()
   const events = {}
-  for (const name of [
-    'zone-open-records',
-    'zone-edit',
-    'zone-add-record',
-    'zone-create',
-  ]) {
+  for (const name of ['zone-open-records', 'zone-edit', 'zone-create']) {
     events[name] = []
     el.addEventListener(name, (e) => events[name].push(e.detail))
   }
@@ -149,8 +157,6 @@ test('clicking a zone emits zone-open-records; action buttons emit their events'
 
   el.querySelector('.zone-edit-btn').click()
   assert.equal(events['zone-edit'].length, 1)
-  el.querySelector('.zone-add-zr-btn').click()
-  assert.equal(events['zone-add-record'].length, 1)
   el.querySelector('button.btn-outline-secondary').click() // + Create
   assert.equal(events['zone-create'].length, 1)
 })
@@ -205,4 +211,149 @@ test('show-deleted lists deleted zones with Restore', async () => {
   await el.updateComplete
   assert.equal(store.zones[0].deleted, false)
   assert.match(el._notice.text, /Restored/)
+})
+
+test('sends Authorization: Bearer when .token is set (guards the 401 regression)', async () => {
+  const seen = []
+  globalThis.fetch = async (url, opts = {}) => {
+    seen.push(opts.headers?.Authorization ?? null)
+    return {
+      json: async () => ({ zone: [], meta: { pagination: { total: 0, filtered: 0 } } }),
+    }
+  }
+  const el = new ZoneTable()
+  document.body.appendChild(el)
+  el.token = 'JWT.abc.123' // exactly what app.js does: el.token = Cookie.get('nt-token')
+  el.gid = 1
+  await el.updateComplete
+  await el._load()
+  assert.ok(seen.length > 0, 'made at least one request')
+  assert.ok(
+    seen.every((a) => a === 'Bearer JWT.abc.123'),
+    `every request must carry the Bearer token, got ${JSON.stringify(seen)}`,
+  )
+})
+
+test('omits Authorization header when no token is set', async () => {
+  const seen = []
+  globalThis.fetch = async (url, opts = {}) => {
+    seen.push('Authorization' in (opts.headers ?? {}))
+    return {
+      json: async () => ({ zone: [], meta: { pagination: { total: 0, filtered: 0 } } }),
+    }
+  }
+  const el = new ZoneTable()
+  document.body.appendChild(el)
+  el.gid = 1
+  await el.updateComplete
+  await el._load()
+  assert.ok(
+    seen.every((present) => present === false),
+    'no Authorization header should be sent without a token',
+  )
+})
+
+test('filters are hidden until the disclosure is opened, and the state persists', async () => {
+  const store = {}
+  globalThis.localStorage = {
+    getItem: (k) => (k in store ? store[k] : null),
+    setItem: (k, v) => {
+      store[k] = String(v)
+    },
+  }
+  try {
+    stubFetch(makeStore(1))
+    const el = await mount()
+    assert.equal(el._filtersOpen, false)
+    assert.equal(el.querySelector('.nt-in-zones'), null) // hidden
+
+    el.querySelector('.nt-zone-filters-toggle').click()
+    await el.updateComplete
+    assert.ok(el.querySelector('.nt-in-zones')) // Subgroups/Deleted/In-zones now shown
+    assert.ok(el.querySelector('.nt-subgroups'))
+    assert.equal(store['nt-zone-filters-open'], '1')
+
+    const fresh = new ZoneTable() // reads the saved state
+    assert.equal(fresh._filtersOpen, true)
+  } finally {
+    delete globalThis.localStorage
+  }
+})
+
+test('In zones mode searches records across all zones and shows the zone name', async () => {
+  const records = [
+    {
+      id: 1,
+      zid: 300,
+      owner: 'mail',
+      type: 'TXT',
+      address: 'v=spf1 include:x -all',
+      ttl: 3600,
+    },
+    { id: 2, zid: 301, owner: '@', type: 'TXT', address: 'v=spf1 -all', ttl: 300 },
+  ]
+  const zones = {
+    300: { id: 300, zone: 'aaa.example.com' },
+    301: { id: 301, zone: 'bbb.example.com' },
+  }
+  const calls = []
+  globalThis.fetch = async (url) => {
+    calls.push(url)
+    if (url.includes('/zone_record?')) {
+      return {
+        json: async () => ({
+          zone_record: records,
+          meta: { pagination: { total: 9999, filtered: records.length } },
+        }),
+      }
+    }
+    const m = url.match(/\/zone\/(\d+)/)
+    if (m) return { json: async () => ({ zone: [zones[Number(m[1])]] }) }
+    return { json: async () => ({ zone: [], meta: { pagination: {} } }) }
+  }
+
+  const el = new ZoneTable() // no gid, so only our explicit _load runs
+  document.body.appendChild(el)
+  el._toggleInZones({ target: { checked: true } })
+  el._search = 'spf'
+  await el._load()
+  await el.updateComplete
+
+  assert.ok(
+    calls.some((u) => /\/zone_record\?.*search=spf/.test(u)),
+    'searched zone_record',
+  )
+  assert.equal(el.querySelectorAll('tr.zone-record-hit').length, 2)
+  assert.match(el.textContent, /aaa\.example\.com/) // zid resolved to fqdn
+  assert.match(el.textContent, /v=spf1 include:x/)
+})
+
+test('In zones record hit opens the resolved zone', async () => {
+  const records = [
+    { id: 1, zid: 300, owner: 'mail', type: 'TXT', address: 'spf', ttl: 3600 },
+  ]
+  const zone = { id: 300, zone: 'aaa.example.com' }
+  globalThis.fetch = async (url) => {
+    if (url.includes('/zone_record?')) {
+      return {
+        json: async () => ({
+          zone_record: records,
+          meta: { pagination: { total: 1, filtered: 1 } },
+        }),
+      }
+    }
+    if (/\/zone\/300/.test(url)) return { json: async () => ({ zone: [zone] }) }
+    return { json: async () => ({ zone: [], meta: { pagination: {} } }) }
+  }
+  const el = new ZoneTable()
+  document.body.appendChild(el)
+  el._inZones = true
+  el._search = 'spf'
+  await el._load()
+  await el.updateComplete
+
+  const opened = []
+  el.addEventListener('zone-open-records', (e) => opened.push(e.detail.zone))
+  el.querySelector('tr.zone-record-hit .zone-name-toggle').click()
+  assert.deepEqual(opened, [zone])
 })
