@@ -34,17 +34,17 @@
 import readline from 'node:readline'
 import mysql from 'mysql2/promise'
 
-const NS_ID    = Number(process.env.NT_PDNS_NS_ID   ?? 1)
+const NS_ID = Number(process.env.NT_PDNS_NS_ID ?? 1)
 const CACHE_TTL = Number(process.env.NT_PDNS_CACHE_TTL ?? 20)
-const LOG      = process.env.NT_PDNS_LOG === '1'
+const LOG = process.env.NT_PDNS_LOG === '1'
 
 const dbCfg = {
-  host:     process.env.NT_PDNS_DB_HOST ?? '127.0.0.1',
-  port:     Number(process.env.NT_PDNS_DB_PORT ?? 3306),
-  user:     process.env.NT_PDNS_DB_USER ?? 'nictool',
+  host: process.env.NT_PDNS_DB_HOST ?? '127.0.0.1',
+  port: Number(process.env.NT_PDNS_DB_PORT ?? 3306),
+  user: process.env.NT_PDNS_DB_USER ?? 'nictool',
   password: process.env.NT_PDNS_DB_PASS,
   database: process.env.NT_PDNS_DB_NAME ?? 'nictool',
-  ssl:      { rejectUnauthorized: false },
+  ssl: { rejectUnauthorized: false },
 }
 
 if (!dbCfg.password) {
@@ -58,11 +58,14 @@ const cache = new Map()
 function cacheGet(key) {
   const entry = cache.get(key)
   if (!entry) return null
-  if (entry.expire < (Date.now() / 1000)) { cache.delete(key); return null }
+  if (entry.expire < Date.now() / 1000) {
+    cache.delete(key)
+    return null
+  }
   return entry.data
 }
 function cacheSet(key, data) {
-  cache.set(key, { data, expire: (Date.now() / 1000) + CACHE_TTL })
+  cache.set(key, { data, expire: Date.now() / 1000 + CACHE_TTL })
 }
 
 // -------------------------------------------------------------------------
@@ -120,8 +123,8 @@ function rrContentFields(r) {
   }
   if (r.type === 'SRV') {
     const priority = r.priority ?? 0
-    const weight   = r.weight   ?? 0
-    const port     = r.other    ?? 0
+    const weight = r.weight ?? 0
+    const port = r.other ?? 0
     return [priority, `${weight} ${port} ${address}`]
   }
   return [address]
@@ -144,7 +147,10 @@ function uniqRows(rows) {
 async function getRecords(qname, qclass, qtype) {
   const cacheKey = `${qname}:${qtype}`
   const cached = cacheGet(cacheKey)
-  if (cached) { log(`cache hit ${cacheKey}`); return cached }
+  if (cached) {
+    log(`cache hit ${cacheKey}`)
+    return cached
+  }
 
   // Build ordered list of (zone, record) candidates from qname.
   // We peel labels off the front to find the containing zone.
@@ -216,7 +222,10 @@ async function getRecords(qname, qclass, qtype) {
     const content = rrContentFields(r)
     const line = ['DATA', qname, qclass, r.type, r.ttl, r.nt_zone_id, ...content]
     const key = line.join('\t')
-    if (!seen.has(key)) { seen.add(key); result.push(line) }
+    if (!seen.has(key)) {
+      seen.add(key)
+      result.push(line)
+    }
   }
 
   cacheSet(cacheKey, result)
@@ -249,10 +258,23 @@ async function getSOA(qname, qclass) {
 
   if (!rows.length) return []
   const z = rows[0]
-  return [[
-    'DATA', qname, qclass, 'SOA', z.ttl, z.nt_zone_id,
-    z.name, z.mailaddr, z.serial, z.refresh, z.retry, z.expire, z.ttl,
-  ]]
+  return [
+    [
+      'DATA',
+      qname,
+      qclass,
+      'SOA',
+      z.ttl,
+      z.nt_zone_id,
+      z.name,
+      z.mailaddr,
+      z.serial,
+      z.refresh,
+      z.retry,
+      z.expire,
+      z.ttl,
+    ],
+  ]
 }
 
 async function getAXFR(zoneId) {
@@ -300,7 +322,7 @@ for await (const line of rl) {
   }
 
   const parts = trimmed.split('\t')
-  const type  = parts[0]
+  const type = parts[0]
 
   log(`received: ${trimmed}`)
 
@@ -313,10 +335,16 @@ for await (const line of rl) {
         rows = await getSOA(qname, qclass)
         cacheSet(`${qname}:${qtype}`, rows)
       } else if (qtype === 'NS') {
-        rows = uniqRows([...await getNS(qname, qclass), ...await getRecords(qname, qclass, qtype)])
+        rows = uniqRows([
+          ...(await getNS(qname, qclass)),
+          ...(await getRecords(qname, qclass, qtype)),
+        ])
         cacheSet(`${qname}:${qtype}`, rows)
       } else if (qtype === 'ANY') {
-        rows = uniqRows([...await getRecords(qname, qclass, qtype), ...await getNS(qname, qclass)])
+        rows = uniqRows([
+          ...(await getRecords(qname, qclass, qtype)),
+          ...(await getNS(qname, qclass)),
+        ])
         cacheSet(`${qname}:${qtype}`, rows)
       } else {
         rows = await getRecords(qname, qclass, qtype)

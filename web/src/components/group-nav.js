@@ -27,6 +27,19 @@ export class GroupNav extends LitElement {
     return this
   }
 
+  connectedCallback() {
+    super.connectedCallback()
+    // The host element is the flex item in the app's layout row, but it renders
+    // into light DOM, so the sizing has to live here rather than on the inner
+    // markup. Without flex: 0 0 auto the wide zone table shrinks the rail and
+    // paints over it.
+    Object.assign(this.style, {
+      display: 'flex',
+      flex: '0 0 auto',
+      alignSelf: 'stretch',
+    })
+  }
+
   constructor() {
     super()
     this.rootGid = null
@@ -170,7 +183,7 @@ export class GroupNav extends LitElement {
         <button
           type="button"
           class="nt-group-nav nt-group-collapsed nt-group-toggle btn btn-light border-end rounded-0 p-1"
-          style="writing-mode: vertical-rl; align-self: stretch; flex: 0 0 auto; text-align: start"
+          style="writing-mode: vertical-rl; flex: 1 1 auto; text-align: start; overflow: hidden"
           title=${`Show groups — ${name}`}
           @click=${() => (this._collapsed = false)}
         >
@@ -186,7 +199,7 @@ export class GroupNav extends LitElement {
     return html`
       <div
         class="nt-group-nav border-end d-flex flex-column"
-        style="width: 15rem; flex: 0 0 auto; align-self: stretch"
+        style="width: 15rem; flex: 1 1 auto; min-height: 0"
       >
         <div class="d-flex align-items-center gap-1 p-2 border-bottom">
           <button

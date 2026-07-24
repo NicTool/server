@@ -2,58 +2,50 @@
 
 NicTool is an open-source DNS management system. This package provides the **server** — a Node.js process that ties the NicTool DNS system together. It wears several hats:
 
-## Bootstrap web configurator (index.js + html/)
+## Web configurator (index.js + html/)
 
-- Starts an HTTPS server that serves a browser-based setup UI (html/configure.html, index.html, main.js).
-- On first run it presents a config form; on POST to /nt/config it writes <config-dir>/etc/nictool.toml and flips configured = true so subsequent starts skip straight to running services.
-- Small JSON control API for the UI: /nt/config, /nt/status, /nt/service, /nt/nameservers/status, /nt/check-path (validates/tests writable data paths).
-- Serves static assets, with path-traversal guarding, including files from the installed @nictool/* packages under /nictool/.
+- Starts a web server that serves the setup UI
+- On first run it presents a config form to set the data store and API.
 
 ## TLS auto-provisioning (bin/start.js)
 
-- Discovers an existing cert (<hostname>.pem, localhost.pem, or legacy cert.pem+key.pem), parsing key/cert blocks out of a combined PEM.
-- If none found, shells out to openssl to generate a self-signed cert and saves it.
-- Picks a listen port: prefers 443 → falls back to 8443 → random free port.
+- Discovers an existing cert or uses openssl to generate a cert.
+- Picks a listen port: prefers 443 → 8443 → random free port.
 
 ## Process supervisor / launcher (bin/start.js)
 
-- CLI entry (nictool-server -c <dir>), reads nictool.toml.
-- Hosts the @nictool/api (Hapi) server in-process via hapiServer.inject() when api.mode = "local", patching the API's mysql.toml and setting NICTOOL_DATA_STORE* env vars from the store config. When api.mode = "remote", it reverse-proxies /api/* and /doc to the remote API instead.
+- CLI entry (nictool-server -c <dir>), reads nictool.toml. When api.mode =
+  - local: hosts the @nictool/api server in-process
+  - remote: it proxies /api/* and /doc to the remote API
 - Handles SIGINT/SIGTERM to cleanly stop nameservers.
 
 ## Nameserver supervisor (lib/nameservers.js)
 
-- Reads [[nameserver]] blocks and starts/stops one or more DNS engines from @nictool/dns-nameserver.
+- Reads nameserver configs from data store, starts/stops each DNS engine
 - Supports a native in-memory authoritative server plus export engines (bind, knot, nsd, powerdns, tinydns, maradns), wiring up the right Source (mysql / toml-directory), Publisher (memory / rfc1035 / tinydns-cdb / powerdns-db), Transport (noop / rsync / axfr / db-replication), and DNSSEC Signer per engine.
 
 ## PowerDNS co-process backend (bin/nt_powerdns.js)
 
-- Standalone nt-powerdns binary implementing the PowerDNS pipe/co-process v1 protocol over stdin/stdout (a JS port of the legacy nt_powerdns.pl).
-- Queries the NicTool MySQL schema directly (nt_zone, nt_zone_record, nt_nameserver, nt_zone_nameserver) to answer Q / SOA / NS / ANY / AXFR, with a TTL cache and reconnect-on-drop.
+- Standalone nt-powerdns binary implementing the PowerDNS pipe/co-process v1 protocol over stdin/stdout.
+- Queries the NicTool MySQL schema directly to answer Q / SOA / NS / ANY / AXFR, with a TTL cache and reconnect-on-drop.
 
 ## Data model / config
 
-- Everything is driven by nictool.toml ([store], [api], [[nameserver]]). Store can be MySQL or a TOML file directory (see data/zone.toml, data/zone_record.toml).
+- Everything is driven by nictool.toml ([store], [api], [[nameserver]]). Store can be MySQL or a file directory (see data/zone.toml, data/zone_record.toml).
 - Depends on the sibling workspace packages via file:../ links: @nictool/api, dns-nameserver, dns-zone, dns-resource-record.
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) 18 or later
-- `openssl` in `$PATH` (used to auto-generate self-signed TLS certs on first run)
-- MySQL 8+ **or** a writable directory (for the TOML-based file store)
+- [Node.js](https://nodejs.org/) 20 or later
+- `openssl` in `$PATH` (to auto-generate self-signed TLS certs)
+- MySQL 8+ **or** a writable directory (for the file-based stores)
 
 ## Quickstart
 
 ### 1. Install
 
 ```sh
-npm install -g nictool
-```
-
-Or run without installing:
-
-```sh
-npx nictool-server -c /var/lib/nictool
+npm install -g @nictool/server
 ```
 
 ### 2. Create a data directory
@@ -65,7 +57,7 @@ mkdir -p /var/lib/nictool
 ### 3. Start the server
 
 ```sh
-nictool-server -c /var/lib/nictool
+npm run server
 ```
 
 On first run the server will:
@@ -87,10 +79,10 @@ All settings live in `<config-dir>/etc/nictool.toml`. The file is created by the
 
 ### Data store options
 
-| `store.type` | Description |
-|---|---|
-| `mysql` | Production-ready; requires MySQL 8+ |
-| `directory` | File-based TOML store; good for development |
+| `store.type` | Description                                 |
+| ------------ | ------------------------------------------- |
+| `mysql`      | Production-ready; requires MySQL 8+         |
+| `directory`  | File-based TOML store; good for development |
 
 #### MySQL example
 
@@ -260,13 +252,13 @@ END
 
 #### Supported query types
 
-| Type | Source |
-|------|--------|
-| A, AAAA, CNAME, MX, PTR, TXT, SRV | `nt_zone_record` |
-| NS | `nt_nameserver` via `nt_zone_nameserver` |
-| SOA | `nt_zone` (serial, refresh, retry, expire, ttl) |
-| ANY | union of records + NS rows |
-| AXFR | all records for the requested zone id |
+| Type                              | Source                                          |
+| --------------------------------- | ----------------------------------------------- |
+| A, AAAA, CNAME, MX, PTR, TXT, SRV | `nt_zone_record`                                |
+| NS                                | `nt_nameserver` via `nt_zone_nameserver`        |
+| SOA                               | `nt_zone` (serial, refresh, retry, expire, ttl) |
+| ANY                               | union of records + NS rows                      |
+| AXFR                              | all records for the requested zone id           |
 
 ---
 

@@ -86,7 +86,10 @@ const nicConfig = await readNicToolToml(tomlPath)
 // Port selection – prefer 443, fall back to 8443
 // ---------------------------------------------------------------------------
 
-const port = (await resolvePort(host, 443)) ?? (await resolvePort(host, 8443)) ?? (await randomAvailablePort(host))
+const port =
+  (await resolvePort(host, 443)) ??
+  (await resolvePort(host, 8443)) ??
+  (await randomAvailablePort(host))
 
 // ---------------------------------------------------------------------------
 // If already configured, skip the configurator and go straight to services
@@ -95,7 +98,11 @@ const port = (await resolvePort(host, 443)) ?? (await resolvePort(host, 8443)) ?
 const supervisor = new NameserverSupervisor()
 
 async function shutdown() {
-  try { await supervisor.stop() } catch { /* ignore */ }
+  try {
+    await supervisor.stop()
+  } catch {
+    /* ignore */
+  }
   process.exit(0)
 }
 process.once('SIGTERM', shutdown)
@@ -105,11 +112,19 @@ if (nicConfig?.configured === true) {
   console.log('Already configured — starting services.')
   const apiServer = await maybeInitAPI(nicConfig)
   const apiRemoteUrl = buildRemoteUrl(nicConfig)
-  await startServer({ configDir, tls, host, port, nicConfig, apiServer, apiRemoteUrl, supervisor })
+  await startServer({
+    configDir,
+    tls,
+    host,
+    port,
+    nicConfig,
+    apiServer,
+    apiRemoteUrl,
+    supervisor,
+  })
   try {
     await supervisor.start(nicConfig)
-  }
-  catch (err) {
+  } catch (err) {
     console.error(`Supervisor start failed: ${err.message}`)
   }
 } else {
@@ -138,8 +153,14 @@ if (nicConfig?.configured === true) {
       }
       if (ctx.supervisor) {
         // Restart nameserver engines with the freshly saved config.
-        try { await ctx.supervisor.stop() } catch { /* ignore */ }
-        try { await ctx.supervisor.start(config) } catch (err) {
+        try {
+          await ctx.supervisor.stop()
+        } catch {
+          /* ignore */
+        }
+        try {
+          await ctx.supervisor.start(config)
+        } catch (err) {
           console.error(`Supervisor start failed: ${err.message}`)
         }
       }
@@ -167,8 +188,7 @@ async function discoverTLS(dir, hostname) {
       if (parsed?.key && parsed?.cert) {
         console.log(`Using TLS from ${file}`)
         return { ...parsed, hostname: certHost }
-      }
-      else {
+      } else {
         console.warn(`missing valid PEM blocks in ${file}, skipping`)
       }
     } catch (e) {
@@ -223,7 +243,10 @@ async function generateTLS(dir, hostname) {
     `/CN=${hostname}`,
   ])
 
-  const [key, cert] = await Promise.all([fs.readFile(tmpKey, 'utf8'), fs.readFile(tmpCert, 'utf8')])
+  const [key, cert] = await Promise.all([
+    fs.readFile(tmpKey, 'utf8'),
+    fs.readFile(tmpCert, 'utf8'),
+  ])
   await fs.writeFile(pemFile, key + cert)
   await Promise.allSettled([fs.unlink(tmpKey), fs.unlink(tmpCert)])
 
@@ -281,9 +304,9 @@ async function maybeInitAPI(config) {
       const content = await fs.readFile(mysqlTomlPath, 'utf8')
       const mysqlCfg = parse(content)
       const s = config.store
-      mysqlCfg.host     = s.host     ?? mysqlCfg.host
-      mysqlCfg.port     = s.port     ?? mysqlCfg.port
-      mysqlCfg.user     = s.user     ?? mysqlCfg.user
+      mysqlCfg.host = s.host ?? mysqlCfg.host
+      mysqlCfg.port = s.port ?? mysqlCfg.port
+      mysqlCfg.user = s.user ?? mysqlCfg.user
       mysqlCfg.password = s.password ?? mysqlCfg.password
       mysqlCfg.database = s.database ?? mysqlCfg.database
       await fs.writeFile(mysqlTomlPath, stringify(mysqlCfg))
@@ -295,7 +318,7 @@ async function maybeInitAPI(config) {
   // Set process env vars the API reads at init time
   process.env.NICTOOL_DATA_STORE = storeTypeToEnv(config.store?.type)
   if (config.store?.path) process.env.NICTOOL_DATA_STORE_PATH = config.store.path
-  if (config.store?.dsn)  process.env.NICTOOL_DATA_STORE_DSN  = config.store.dsn
+  if (config.store?.dsn) process.env.NICTOOL_DATA_STORE_DSN = config.store.dsn
 
   try {
     const hapiServer = await initAPI()

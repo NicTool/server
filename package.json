@@ -1,7 +1,7 @@
 {
-  "name": "nictool",
-  "version": "0.0.2",
-  "description": "NicTool, the DNS manager",
+  "name": "@nictool/server",
+  "version": "0.2.0",
+  "description": "NicTool server, the DNS managers server component",
   "main": "index.js",
   "type": "module",
   "bin": {
@@ -10,9 +10,6 @@
   },
   "scripts": {
     "build": "npm run web:build",
-    "web:build": "vite build",
-    "web:watch": "vite build --watch",
-    "test:e2e": "playwright test",
     "clean": "rm -rf coverage node_modules package-lock.json html/dist",
     "format:check": "npm run prettier; npm run lint",
     "format": "npm run prettier -- --write && npm run lint:fix",
@@ -25,9 +22,12 @@
     "test": "node --test",
     "test:coverage": "node --test --experimental-test-coverage",
     "test:coverage:lcov": "mkdir -p coverage && node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/lcov.info",
+    "test:e2e": "playwright test",
     "versions": "npx npm-dep-mgr check",
     "versions:fix": "npx npm-dep-mgr update",
-    "watch": "node --test --watch test/*.js"
+    "watch": "node --test --watch test/*.js",
+    "web:build": "vite build",
+    "web:watch": "vite build --watch"
   },
   "repository": {
     "type": "git",
@@ -47,7 +47,7 @@
   },
   "homepage": "https://github.com/NicTool/server#readme",
   "dependencies": {
-    "@nictool/api": "file:../api",
+    "@nictool/api": "3.0.0-alpha.12",
     "@nictool/dns-nameserver": "file:../dns-nameserver",
     "@nictool/dns-resource-record": "file:../dns-resource-record",
     "@nictool/dns-zone": "file:../dns-zone",

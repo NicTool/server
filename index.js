@@ -10,17 +10,17 @@ const __dirname = new URL('.', import.meta.url).pathname
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
-  '.js':   'text/javascript',
-  '.mjs':  'text/javascript',
-  '.css':  'text/css',
+  '.js': 'text/javascript',
+  '.mjs': 'text/javascript',
+  '.css': 'text/css',
   '.json': 'application/json',
-  '.svg':  'image/svg+xml',
-  '.png':  'image/png',
-  '.jpg':  'image/jpeg',
-  '.ico':  'image/x-icon',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.ico': 'image/x-icon',
   '.woff': 'font/woff',
-  '.woff2':'font/woff2',
-  '.txt':  'text/plain',
+  '.woff2': 'font/woff2',
+  '.txt': 'text/plain',
 }
 
 /**
@@ -52,7 +52,17 @@ export async function startServer({
 }) {
   const tomlPath = path.join(configDir, 'etc', 'nictool.toml')
   // ctx is mutated as services start/stop
-  const ctx = { configDir, tomlPath, nicConfig, apiServer, apiRemoteUrl, suggestedPorts, host, onSaved, supervisor }
+  const ctx = {
+    configDir,
+    tomlPath,
+    nicConfig,
+    apiServer,
+    apiRemoteUrl,
+    suggestedPorts,
+    host,
+    onSaved,
+    supervisor,
+  }
 
   const server = https.createServer({ cert: tls.cert, key: tls.key }, (req, res) =>
     handleRequest(req, res, ctx),
@@ -84,24 +94,39 @@ async function handleRequest(req, res, ctx) {
 
     if (url === '/nt/config' && method === 'GET') return serveConfig(res, ctx)
     if (url === '/nt/config' && method === 'POST') return await saveConfig(req, res, ctx)
-    if (url?.startsWith('/nt/check-path') && method === 'GET') return await checkPath(req, res, ctx)
-    if (url?.startsWith('/nt/check-dsn') && method === 'GET') return await checkDsn(req, res)
+    if (url?.startsWith('/nt/check-path') && method === 'GET')
+      return await checkPath(req, res, ctx)
+    if (url?.startsWith('/nt/check-dsn') && method === 'GET')
+      return await checkDsn(req, res)
     if (url === '/nt/service' && method === 'GET') return serveService(res, ctx)
     if (url === '/nt/status' && method === 'GET') return await serveStatus(res, ctx)
-    if (url === '/nt/nameservers/status' && method === 'GET') return serveNameserversStatus(res, ctx)
+    if (url === '/nt/nameservers/status' && method === 'GET')
+      return serveNameserversStatus(res, ctx)
 
     if (url?.startsWith('/api/') || url?.startsWith('/doc')) {
       if (ctx.apiServer) return await forwardToAPI(req, res, ctx.apiServer)
       if (ctx.apiRemoteUrl) return forwardToRemote(req, res, ctx.apiRemoteUrl)
     }
 
-    if (method === 'GET' && url?.startsWith('/nictool/')) return await serveStatic(req, res, path.join(__dirname, 'node_modules', '@nictool'), '/nictool/')
-    if (method === 'GET') return await serveStatic(req, res, path.join(__dirname, 'html'), '/')
+    if (method === 'GET' && url?.startsWith('/nictool/'))
+      return await serveStatic(
+        req,
+        res,
+        path.join(__dirname, 'node_modules', '@nictool'),
+        '/nictool/',
+      )
+    if (method === 'GET')
+      return await serveStatic(req, res, path.join(__dirname, 'html'), '/')
 
     respond(res, 404, 'application/json', JSON.stringify({ error: `Not Found ${url}` }))
   } catch (err) {
     console.error(err)
-    respond(res, 500, 'application/json', JSON.stringify({ error: 'Internal Server Error' }))
+    respond(
+      res,
+      500,
+      'application/json',
+      JSON.stringify({ error: 'Internal Server Error' }),
+    )
   }
 }
 
@@ -137,11 +162,20 @@ async function serveStatic(req, res, rootDir, urlPrefix) {
       return
     }
     const content = await fs.readFile(filePath)
-    res.writeHead(200, { 'Content-Type': contentType, ETag: etag, 'Cache-Control': 'no-cache' })
+    res.writeHead(200, {
+      'Content-Type': contentType,
+      ETag: etag,
+      'Cache-Control': 'no-cache',
+    })
     res.end(content)
   } catch (err) {
     if (err.code === 'ENOENT') {
-      respond(res, 404, 'application/json', JSON.stringify({ error: `Not Found: static ${urlPath}` }))
+      respond(
+        res,
+        404,
+        'application/json',
+        JSON.stringify({ error: `Not Found: static ${urlPath}` }),
+      )
     } else {
       throw err
     }
@@ -150,9 +184,19 @@ async function serveStatic(req, res, rootDir, urlPrefix) {
 
 function serveConfig(res, { nicConfig, suggestedPorts, host }) {
   if (nicConfig) {
-    respond(res, 200, 'application/json', JSON.stringify({ ...nicConfig, _hostname: host }, null, 2))
+    respond(
+      res,
+      200,
+      'application/json',
+      JSON.stringify({ ...nicConfig, _hostname: host }, null, 2),
+    )
   } else {
-    respond(res, 200, 'application/json', JSON.stringify({ _suggested: suggestedPorts ?? {}, _hostname: host }, null, 2))
+    respond(
+      res,
+      200,
+      'application/json',
+      JSON.stringify({ _suggested: suggestedPorts ?? {}, _hostname: host }, null, 2),
+    )
   }
 }
 
@@ -164,32 +208,63 @@ function serveService(res, { apiServer }) {
 async function checkPath(req, res, { configDir }) {
   const qs = new URL(req.url, 'http://x').searchParams
   const p = qs.get('path')
-  if (!p) return respond(res, 400, 'application/json', JSON.stringify({ error: 'path required' }))
+  if (!p)
+    return respond(
+      res,
+      400,
+      'application/json',
+      JSON.stringify({ error: 'path required' }),
+    )
 
   const resolved = path.isAbsolute(p) ? p : path.resolve(configDir, p)
 
   try {
     const stat = await fs.stat(resolved)
     if (stat.isDirectory()) {
-      respond(res, 200, 'application/json', JSON.stringify({ ok: true, exists: true, resolved }))
+      respond(
+        res,
+        200,
+        'application/json',
+        JSON.stringify({ ok: true, exists: true, resolved }),
+      )
     } else {
-      respond(res, 200, 'application/json', JSON.stringify({ ok: false, error: 'Path exists but is not a directory' }))
+      respond(
+        res,
+        200,
+        'application/json',
+        JSON.stringify({ ok: false, error: 'Path exists but is not a directory' }),
+      )
     }
   } catch (err) {
     if (err.code !== 'ENOENT') {
-      return respond(res, 200, 'application/json', JSON.stringify({ ok: false, error: err.message }))
+      return respond(
+        res,
+        200,
+        'application/json',
+        JSON.stringify({ ok: false, error: err.message }),
+      )
     }
     let ancestor = path.dirname(resolved)
     while (ancestor !== path.dirname(ancestor)) {
       try {
         await fs.access(ancestor, fs.constants.W_OK)
-        return respond(res, 200, 'application/json', JSON.stringify({ ok: true, exists: false, resolved }))
+        return respond(
+          res,
+          200,
+          'application/json',
+          JSON.stringify({ ok: true, exists: false, resolved }),
+        )
       } catch (e) {
         if (e.code !== 'ENOENT') break
         ancestor = path.dirname(ancestor)
       }
     }
-    respond(res, 200, 'application/json', JSON.stringify({ ok: false, error: 'No writable ancestor directory found' }))
+    respond(
+      res,
+      200,
+      'application/json',
+      JSON.stringify({ ok: false, error: 'No writable ancestor directory found' }),
+    )
   }
 }
 
@@ -216,13 +291,24 @@ function parseMysqlDsn(dsn) {
  */
 async function checkDsn(req, res) {
   const dsn = new URL(req.url, 'http://x').searchParams.get('dsn')
-  if (!dsn) return respond(res, 400, 'application/json', JSON.stringify({ error: 'dsn required' }))
+  if (!dsn)
+    return respond(
+      res,
+      400,
+      'application/json',
+      JSON.stringify({ error: 'dsn required' }),
+    )
 
   let cfg
   try {
     cfg = parseMysqlDsn(dsn)
   } catch (err) {
-    return respond(res, 200, 'application/json', JSON.stringify({ ok: false, error: err.message }))
+    return respond(
+      res,
+      200,
+      'application/json',
+      JSON.stringify({ ok: false, error: err.message }),
+    )
   }
 
   let conn
@@ -234,7 +320,11 @@ async function checkDsn(req, res) {
     const error = err.code ? `${err.code}: ${err.message}` : err.message
     respond(res, 200, 'application/json', JSON.stringify({ ok: false, error }))
   } finally {
-    try { await conn?.end() } catch { /* ignore */ }
+    try {
+      await conn?.end()
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -246,7 +336,11 @@ async function serveStatus(res, { tomlPath, nicConfig, apiServer, supervisor }) 
     res,
     200,
     'application/json',
-    JSON.stringify({ configured, tomlPath, config: nicConfig, api, nameservers }, null, 2),
+    JSON.stringify(
+      { configured, tomlPath, config: nicConfig, api, nameservers },
+      null,
+      2,
+    ),
   )
 }
 
@@ -260,17 +354,32 @@ async function saveConfig(req, res, ctx) {
   try {
     body = JSON.parse(await readBody(req))
   } catch {
-    return respond(res, 400, 'application/json', JSON.stringify({ error: 'Invalid JSON' }))
+    return respond(
+      res,
+      400,
+      'application/json',
+      JSON.stringify({ error: 'Invalid JSON' }),
+    )
   }
 
   // Strip runtime-only flags from the toml payload
   const { startApi: _startApi, _hostname: _h, _suggested: _s, ...config } = body
 
   if (!config.store?.type) {
-    return respond(res, 400, 'application/json', JSON.stringify({ error: 'Missing required fields' }))
+    return respond(
+      res,
+      400,
+      'application/json',
+      JSON.stringify({ error: 'Missing required fields' }),
+    )
   }
   if (config.api?.mode === 'remote' && (!config.api?.host || !(config.api?.port > 0))) {
-    return respond(res, 400, 'application/json', JSON.stringify({ error: 'Remote API mode requires host and port' }))
+    return respond(
+      res,
+      400,
+      'application/json',
+      JSON.stringify({ error: 'Remote API mode requires host and port' }),
+    )
   }
 
   // Mark configuration as complete — this is the flag that skips the configurator on next run
@@ -292,7 +401,7 @@ async function saveConfig(req, res, ctx) {
 // ---------------------------------------------------------------------------
 
 async function forwardToAPI(req, res, hapiServer) {
-  const apiPath = req.url.slice(4) || '/'  // strip '/api' prefix
+  const apiPath = req.url.slice(4) || '/' // strip '/api' prefix
 
   const forwardHeaders = {}
   for (const hdr of ['authorization', 'content-type', 'accept']) {
