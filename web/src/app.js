@@ -937,8 +937,9 @@ function getRdataInput(field, value = '', rr, placeholder = ' ') {
       input += `<option value="${escapeHtml(`${o[0]}`)}" ${value === o[0] ? 'selected' : ''}>${escapeHtml(`${o[0]}`)}${o[1] ? ` - ${escapeHtml(`${o[1]}`)}` : ''}</option>`
     }
     input += `</select>`
-  } else if (rr.get('type') === 'NAPTR' && field === 'flags') {
-  } else {
+    // NAPTR flags are characters (S/A/U/P, RFC 3403), so they keep the text
+    // input rather than the number input the 'flags' case below would give them.
+  } else if (!(rr.get('type') === 'NAPTR' && field === 'flags')) {
     switch (field) {
       case 'cert type':
       case 'hash algorithm':
