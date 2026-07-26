@@ -1,6 +1,6 @@
 {
   "name": "@nictool/server",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "NicTool server, the DNS managers server component",
   "main": "index.js",
   "type": "module",
@@ -47,13 +47,13 @@
   },
   "homepage": "https://github.com/NicTool/server#readme",
   "dependencies": {
-    "@nictool/api": "3.0.0-alpha.12",
-    "@nictool/dns-nameserver": "file:../dns-nameserver",
-    "@nictool/dns-resource-record": "file:../dns-resource-record",
-    "@nictool/dns-zone": "file:../dns-zone",
+    "@nictool/api": "^3.0.2",
+    "@nictool/dns-nameserver": "^0.8.0",
+    "@nictool/dns-resource-record": "^1.8.1",
+    "@nictool/dns-zone": "^1.2.3",
     "joi": "^18.2.3",
     "mysql2": "^3.23.1",
-    "smol-toml": "^1.7.0"
+    "smol-toml": "^1.7.1"
   },
   "prettier": {
     "printWidth": 90,
@@ -61,7 +61,10 @@
     "semi": false
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.0",
+    "globals": "^17.8.0",
+    "@playwright/test": "^1.62.0",
     "jsdom": "^29.1.1",
     "lit": "^3.3.3",
     "vite": "^8.1.5"

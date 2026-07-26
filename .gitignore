@@ -115,3 +115,4 @@ conf.d
 # Playwright
 test-results/
 playwright-report/
+.release/
