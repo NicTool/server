@@ -15,7 +15,9 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const apiDir = fileURLToPath(new URL('../node_modules/@nictool/api/', import.meta.url))
+const apiDir = fileURLToPath(
+  new URL('./', import.meta.resolve('@nictool/api/package.json')),
+)
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-jwt-'))
 const store = path.join(tmp, 'store')
 fs.mkdirSync(store)
@@ -63,12 +65,8 @@ before(async () => {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
   process.chdir(apiDir) // the API loads config from ./conf.d relative to cwd
 
-  const { default: Group } = await import(
-    new URL('../node_modules/@nictool/api/lib/group/index.js', import.meta.url)
-  )
-  const { default: User } = await import(
-    new URL('../node_modules/@nictool/api/lib/user/index.js', import.meta.url)
-  )
+  const { default: Group } = await import('@nictool/api/lib/group/index.js')
+  const { default: User } = await import('@nictool/api/lib/user/index.js')
   const groupCase = JSON.parse(
     fs.readFileSync(path.join(apiDir, 'routes/test/group.json')),
   )
@@ -81,9 +79,7 @@ before(async () => {
     password: userCase.password,
   }
 
-  const { init: initAPI } = await import(
-    new URL('../node_modules/@nictool/api/routes/index.js', import.meta.url)
-  )
+  const { init: initAPI } = await import('@nictool/api/routes/index.js')
   const apiServer = await initAPI()
 
   const { startServer } = await import(new URL('../index.js', import.meta.url))
