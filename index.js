@@ -2,11 +2,13 @@ import http from 'node:http'
 import https from 'node:https'
 import path from 'node:path'
 import fs from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
 
 import { stringify } from 'smol-toml'
 import mysql from 'mysql2/promise'
 
-const __dirname = new URL('.', import.meta.url).pathname
+// .pathname is drive-relative on Windows ("/D:/a/server")
+const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
