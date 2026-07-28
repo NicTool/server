@@ -363,6 +363,101 @@
       <h1>NicTool Configurator</h1>
 
       <form id="cfg" novalidate>
+        <!-- ===== Install type ===== -->
+        <div class="card">
+          <div class="card-header">
+            <h2>Installation</h2>
+            <span class="badge pending" id="b-install">—</span>
+          </div>
+          <div class="card-body">
+            <div class="fields">
+              <div class="field narrow">
+                <label for="install-type">Type</label>
+                <select id="install-type" name="install">
+                  <option value="new" selected>New install</option>
+                  <option value="upgrade">Upgrade from NicTool 2.x</option>
+                </select>
+                <span class="field-note" id="n-install"></span>
+              </div>
+            </div>
+            <div id="upgrade-note" style="display: none; margin-top: 0.75rem">
+              <p class="field-note">
+                An upgrade adopts the MySQL database from your existing NicTool 2.x
+                install. The data store below is locked to MySQL; enter its DSN and click
+                <strong>Detect</strong> to confirm the schema is found. NicTool will never
+                re-create tables in a database that already has them.
+              </p>
+              <button type="button" id="detect-schema">Detect existing schema</button>
+              <span class="field-note" id="n-detect"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== API Service ===== -->
+        <div class="card">
+          <div class="card-header">
+            <h2>API Service</h2>
+            <span class="badge pending" id="b-api">—</span>
+          </div>
+          <div class="card-body">
+            <div class="fields">
+              <div class="field narrow">
+                <label for="api-mode">Mode</label>
+                <select id="api-mode" name="api.mode">
+                  <option value="in_process" selected>in process</option>
+                  <option value="tcp">local, on a TCP port</option>
+                  <option value="remote">remote</option>
+                </select>
+                <span class="field-note" id="n-api-mode">How the API is reached</span>
+              </div>
+            </div>
+            <div id="api-remote-fields" style="display: none; margin-top: 0.75rem">
+              <div class="fields">
+                <div class="field wide">
+                  <label for="api-host">Host</label>
+                  <input
+                    type="text"
+                    id="api-host"
+                    name="api.host"
+                    placeholder="api.example.com"
+                    autocomplete="off"
+                  />
+                  <span class="field-note" id="n-api-host"></span>
+                </div>
+                <div class="field narrow">
+                  <label for="api-port">Port</label>
+                  <input
+                    type="number"
+                    id="api-port"
+                    name="api.port"
+                    min="1"
+                    max="65535"
+                  />
+                  <span class="field-note" id="n-api-port"></span>
+                </div>
+              </div>
+              <p class="field-note">
+                The remote API needs its own config. Save this page, then download
+                <code>api.json</code> and place it in the API host's config directory (or
+                point <code>NICTOOL_CONF_DIR</code> at it).
+              </p>
+              <button type="button" id="download-api-config">Download api.json</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== API Bootstrap ===== -->
+        <div class="card">
+          <div class="card-header">
+            <h2>API Status</h2>
+            <span class="badge pending" id="b-boot">—</span>
+          </div>
+          <div class="card-body">
+            <p class="field-note" id="boot-status">not started</p>
+            <p class="field-note" id="boot-detail"></p>
+          </div>
+        </div>
+
         <!-- ===== Data Store ===== -->
         <div class="card">
           <div class="card-header">
@@ -374,12 +469,20 @@
               <div class="field narrow">
                 <label for="store-type">Type</label>
                 <select id="store-type" name="store.type">
-                  <option value="directory">directory</option>
-                  <option value="mysql">mysql</option>
-                  <option value="mongodb" disabled>mongodb (coming soon)</option>
-                  <option value="elasticsearch" disabled>
-                    elasticsearch (coming soon)
-                  </option>
+                  <optgroup label="Files">
+                    <option value="json" selected>JSON</option>
+                    <option value="toml">TOML</option>
+                  </optgroup>
+                  <optgroup label="Database">
+                    <option value="mysql">MySQL</option>
+                    <option value="sqlite" disabled>SQLite (coming soon)</option>
+                  </optgroup>
+                  <optgroup label="Document">
+                    <option value="mongodb" disabled>MongoDB (coming soon)</option>
+                    <option value="elasticsearch" disabled>
+                      Elasticsearch (coming soon)
+                    </option>
+                  </optgroup>
                 </select>
               </div>
               <!-- directory: single path field -->
@@ -453,52 +556,6 @@
                     placeholder="nictool"
                     autocomplete="off"
                   />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- ===== API Service ===== -->
-        <div class="card">
-          <div class="card-header">
-            <h2>API Service</h2>
-            <span class="badge pending" id="b-api">—</span>
-          </div>
-          <div class="card-body">
-            <div class="fields">
-              <div class="field narrow">
-                <label for="api-mode">Mode</label>
-                <select id="api-mode" name="api.mode">
-                  <option value="local">local</option>
-                  <option value="remote">remote</option>
-                </select>
-                <span class="field-note">How the API is reached</span>
-              </div>
-            </div>
-            <div id="api-remote-fields" style="display: none; margin-top: 0.75rem">
-              <div class="fields">
-                <div class="field wide">
-                  <label for="api-host">Host</label>
-                  <input
-                    type="text"
-                    id="api-host"
-                    name="api.host"
-                    placeholder="api.example.com"
-                    autocomplete="off"
-                  />
-                  <span class="field-note" id="n-api-host"></span>
-                </div>
-                <div class="field narrow">
-                  <label for="api-port">Port</label>
-                  <input
-                    type="number"
-                    id="api-port"
-                    name="api.port"
-                    min="1"
-                    max="65535"
-                  />
-                  <span class="field-note" id="n-api-port"></span>
                 </div>
               </div>
             </div>
@@ -666,10 +723,16 @@
       // Tracks the server-side path check result: null=pending, true=ok, false=fail
       let _pathCheckOk = null
       let _pathCheckTimer = null
+      let _pathChecked = null
+
+      // json/toml keep one file per entity in a directory; "directory" is the
+      // legacy name for the same thing.
+      const FILE_STORES = ['json', 'toml', 'directory']
+      const isFileStore = (type) => FILE_STORES.includes(type)
 
       function validateStore() {
         const type = document.getElementById('store-type').value
-        const isDir = type === 'directory'
+        const isDir = isFileStore(type)
         document.getElementById('f-store-path').style.display = isDir ? '' : 'none'
         document.getElementById('f-store-db').style.display = isDir ? 'none' : ''
 
@@ -690,15 +753,20 @@
 
       function checkStorePath() {
         const type = document.getElementById('store-type').value
-        if (type !== 'directory') return
+        if (!isFileStore(type)) return
 
         const val = document.getElementById('store-path').value.trim()
         if (!val) {
           _pathCheckOk = false
+          _pathChecked = null
           setField('store-path', 'n-store-path', false, 'Path is required')
           validateAll()
           return
         }
+
+        // Clicking Save blurs this field, firing change with an unchanged value.
+        // Re-checking would reset the result to pending and swallow the click.
+        if (val === _pathChecked && _pathCheckOk !== null) return
 
         // debounce
         clearTimeout(_pathCheckTimer)
@@ -711,6 +779,7 @@
             const res = await fetch('/nt/check-path?path=' + encodeURIComponent(val))
             const data = await res.json()
             _pathCheckOk = data.ok
+            _pathChecked = val
             const msg = data.ok
               ? data.exists
                 ? 'Directory exists'
@@ -733,24 +802,97 @@
       function validateAPI() {
         const mode = document.getElementById('api-mode').value
         const isRemote = mode === 'remote'
-        document.getElementById('api-remote-fields').style.display = isRemote
+        const needsPort = isRemote || mode === 'tcp'
+
+        document.getElementById('api-remote-fields').style.display = needsPort
+          ? ''
+          : 'none'
+        // A TCP-mode API is forked on this host, so only the port is asked for.
+        document.getElementById('api-host').closest('.field').style.display = isRemote
+          ? ''
+          : 'none'
+        document.getElementById('download-api-config').style.display = isRemote
           ? ''
           : 'none'
 
-        if (!isRemote) {
+        if (!needsPort) {
           setBadge('b-api', true, false)
           return true
         }
 
-        const hostOk = isValidHost(document.getElementById('api-host').value)
         const portOk = isValidPort(document.getElementById('api-port').value)
-
-        setField('api-host', 'n-api-host', hostOk, hostOk ? '' : 'Required')
         setField('api-port', 'n-api-port', portOk, portOk ? '' : '1 – 65535')
 
-        const ok = hostOk && portOk
+        let ok = portOk
+        if (isRemote) {
+          const hostOk = isValidHost(document.getElementById('api-host').value)
+          setField('api-host', 'n-api-host', hostOk, hostOk ? '' : 'Required')
+          ok = ok && hostOk
+        }
+
         setBadge('b-api', ok, false)
         return ok
+      }
+
+      // -------------------------------------------------------------------------
+      // Install type — an upgrade adopts an existing 2.x MySQL database
+      // -------------------------------------------------------------------------
+
+      // null = not checked yet, true = schema found, false = check failed
+      let _schemaFound = null
+
+      function isUpgrade() {
+        return document.getElementById('install-type').value === 'upgrade'
+      }
+
+      function validateInstall() {
+        const upgrade = isUpgrade()
+        document.getElementById('upgrade-note').style.display = upgrade ? '' : 'none'
+
+        const storeSel = document.getElementById('store-type')
+        if (upgrade) {
+          storeSel.value = 'mysql'
+          storeSel.disabled = true
+        } else {
+          storeSel.disabled = false
+        }
+
+        const ok = !upgrade || _schemaFound === true
+        setBadge('b-install', ok, upgrade && _schemaFound === null)
+        return ok
+      }
+
+      async function detectSchema() {
+        const dsn = dsnFromFields()
+        const note = document.getElementById('n-detect')
+        if (!dsn) {
+          note.textContent = 'Enter the database connection below first'
+          note.className = 'field-note bad'
+          return
+        }
+
+        note.textContent = 'checking…'
+        note.className = 'field-note'
+        try {
+          const res = await fetch('/nt/detect-schema?dsn=' + encodeURIComponent(dsn))
+          const data = await res.json()
+          if (!data.ok) {
+            _schemaFound = false
+            note.textContent = data.error || 'Could not connect'
+          } else if (!data.found) {
+            _schemaFound = false
+            note.textContent = 'Connected, but no NicTool schema found in that database'
+          } else {
+            _schemaFound = true
+            note.textContent = `Found NicTool schema${data.version ? ' v' + data.version : ''}`
+          }
+          note.className = 'field-note ' + (_schemaFound ? 'ok' : 'bad')
+        } catch (err) {
+          _schemaFound = false
+          note.textContent = err.message
+          note.className = 'field-note bad'
+        }
+        validateAll()
       }
 
       const ENGINE_OPTIONS = [
@@ -769,7 +911,8 @@
         nsd: 'rfc1035',
         powerdns: 'rfc1035',
         tinydns: 'tinydns-cdb',
-        maradns: 'rfc1035',
+        // MaraDNS reads csv2 zone files, not RFC 1035.
+        maradns: 'maradns',
       }
       const TRANSPORT_OPTIONS = ['noop', 'axfr', 'rsync', 'db-replication']
       const DNSSEC_ALGOS = [
@@ -842,12 +985,13 @@
       }
 
       function validateAll() {
+        const i = validateInstall()
         const s = validateStore()
         const a = validateAPI()
         validateNS()
-        // Only Store + API required to enable Save
-        document.getElementById('btn-save').disabled = !(s && a)
-        return s && a
+        // Only Install + Store + API required to enable Save
+        document.getElementById('btn-save').disabled = !(i && s && a)
+        return i && s && a
       }
 
       // -------------------------------------------------------------------------
@@ -1239,6 +1383,7 @@
         if (apiHost) api.host = apiHost
         if (apiPort) api.port = apiPort
         const config = {
+          install: document.getElementById('install-type').value,
           store,
           api,
           nameserver: [],
@@ -1310,8 +1455,9 @@
       function populateForm(c) {
         if (!c || typeof c !== 'object') return
 
+        if (c.install) document.getElementById('install-type').value = c.install
         if (c.store) {
-          document.getElementById('store-type').value = c.store.type || 'directory'
+          document.getElementById('store-type').value = c.store.type || 'json'
           // Always populate all fields so switching types doesn't lose saved values
           if (c.store.path) {
             document.getElementById('store-path').value = c.store.path
@@ -1332,7 +1478,9 @@
           }
         }
         if (c.api) {
-          document.getElementById('api-mode').value = c.api.mode || 'local'
+          // "local" is the pre-tcp name for in_process
+          const mode = c.api.mode === 'local' ? 'in_process' : c.api.mode
+          document.getElementById('api-mode').value = mode || 'in_process'
           if (c.api.host) document.getElementById('api-host').value = c.api.host
           if (c.api.port) document.getElementById('api-port').value = c.api.port
         } else if (c._suggested?.api) {
@@ -1361,19 +1509,49 @@
         msg.textContent = 'Saving…'
         msg.className = ''
 
+        const config = collectConfig()
+
         try {
+          // A brand-new MySQL install needs its schema before the API can start.
+          // The server refuses this outright if the database is already populated.
+          if (config.install === 'new' && config.store.type === 'mysql') {
+            setBoot('creating schema…', null)
+            const initRes = await fetch('/nt/init-schema', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ install: config.install, dsn: config.store.dsn }),
+            })
+            const initData = await initRes.json()
+            if (!initRes.ok) {
+              setBoot('schema not created', false, initData.error)
+              msg.textContent = '✗ ' + (initData.error || 'Schema creation failed')
+              msg.className = 'err'
+              validateAll()
+              return
+            }
+            setBoot(`created ${initData.applied?.length ?? 0} tables`, null)
+          }
+
           const res = await fetch('/nt/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(collectConfig()),
+            body: JSON.stringify(config),
           })
           const data = await res.json()
-          if (res.ok) {
-            window.location.href = '/index.html'
-          } else {
+          if (!res.ok) {
             msg.textContent = '✗ ' + (data.error || 'Save failed')
             msg.className = 'err'
             validateAll()
+            return
+          }
+
+          msg.textContent = 'Saved. Starting the API…'
+          if (await waitForApi()) {
+            window.location.href = '/index.html'
+          } else {
+            msg.textContent = '✗ Saved, but the API did not start — see the server log'
+            msg.className = 'err'
+            btn.disabled = false
           }
         } catch (err) {
           msg.textContent = '✗ ' + err.message
@@ -1382,15 +1560,61 @@
         }
       })
 
+      function setBoot(text, ok, detail) {
+        document.getElementById('boot-status').textContent = text
+        document.getElementById('boot-detail').textContent = detail ?? ''
+        setBadge('b-boot', ok === true, ok === null)
+      }
+
+      async function refreshBootStatus() {
+        try {
+          const data = await (await fetch('/nt/service')).json()
+          const running = Boolean(data?.api?.running)
+          setBoot(running ? 'API running' : 'API not started', running ? true : null)
+          return running
+        } catch {
+          return false
+        }
+      }
+
+      // The API is initialized after the config response flushes, so poll rather
+      // than assuming it is up the moment the save returns.
+      async function waitForApi() {
+        for (let i = 0; i < 20; i++) {
+          if (await refreshBootStatus()) return true
+          await new Promise((r) => setTimeout(r, 250))
+        }
+        return false
+      }
+
       // -------------------------------------------------------------------------
       // Wire up static field listeners
       // -------------------------------------------------------------------------
 
-      for (const id of ['store-type', 'api-mode', 'api-host', 'api-port']) {
+      for (const id of [
+        'store-type',
+        'api-mode',
+        'api-host',
+        'api-port',
+        'install-type',
+      ]) {
         const el = document.getElementById(id)
         if (el) el.addEventListener('input', validateAll)
         if (el) el.addEventListener('change', validateAll)
       }
+
+      // Switching install type invalidates any previous schema probe.
+      document.getElementById('install-type').addEventListener('change', () => {
+        _schemaFound = null
+        document.getElementById('n-detect').textContent = ''
+        validateAll()
+      })
+
+      document.getElementById('detect-schema').addEventListener('click', detectSchema)
+
+      document.getElementById('download-api-config').addEventListener('click', () => {
+        window.location = '/nt/api-config'
+      })
 
       // store-path triggers async filesystem check
       const storePathEl = document.getElementById('store-path')
@@ -1404,8 +1628,7 @@
       // store-type toggle: reset state, re-run relevant check
       document.getElementById('store-type').addEventListener('change', () => {
         _pathCheckOk = null
-        const type = document.getElementById('store-type').value
-        if (type === 'directory') checkStorePath()
+        if (isFileStore(document.getElementById('store-type').value)) checkStorePath()
         validateAll()
       })
 
@@ -1429,6 +1652,7 @@
           if (data?._hostname) _serverHostname = data._hostname
 
           populateForm(data)
+          refreshBootStatus()
 
           // If no nameservers were populated (fresh install), add an empty starter row
           if (document.getElementById('ns-body').children.length === 0) addNsRow()

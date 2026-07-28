@@ -31,5 +31,10 @@ export default defineConfig({
       testMatch: /app\.[^/]*\.spec\.js/,
       use: { baseURL: 'http://localhost:5175' },
     },
+    {
+      name: 'configurator',
+      testMatch: /configure\.spec\.js/,
+      use: { baseURL: 'http://localhost:5175' },
+    },
   ],
 })
