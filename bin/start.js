@@ -8,11 +8,21 @@ import path from 'node:path'
 import process from 'node:process'
 import { parseArgs, promisify } from 'node:util'
 
-import { parse, stringify } from 'smol-toml'
-
 import { startServer } from '../index.js'
+import ApiProcess from '../lib/api-process.js'
 import NameserverSupervisor from '../lib/nameservers.js'
-import { init as initAPI } from '@nictool/api/routes/index.js'
+import {
+  buildRemoteUrl,
+  etcDir,
+  normalizeApiMode,
+  readBootstrap,
+  writeBootstrap,
+} from '../lib/config.js'
+import {
+  migrateNameservers,
+  resolveNameserverConfig,
+  saveToStore,
+} from '../lib/nameserver-config.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -34,7 +44,7 @@ Options:
   -c, --config <dir>  Path to the NicTool data root (required).
                       TLS certificates are read from <dir>/etc/tls/ and
                       auto-generated for ${os.hostname()} if absent.
-                      The configurator will build <dir>/etc/nictool.toml.
+                      The configurator will build <dir>/etc/nictool.json.
 
 Example:
   nictool-server -c /var/lib/nictool`)
@@ -76,11 +86,10 @@ if (discovered) {
 }
 
 // ---------------------------------------------------------------------------
-// NicTool config (nictool.toml)
+// NicTool bootstrap config (nictool.json)
 // ---------------------------------------------------------------------------
 
-const tomlPath = path.join(configDir, 'etc', 'nictool.toml')
-const nicConfig = await readNicToolToml(tomlPath)
+const nicConfig = await readBootstrap(configDir)
 
 // ---------------------------------------------------------------------------
 // Port selection – prefer 443, fall back to 8443
@@ -96,10 +105,16 @@ const port =
 // ---------------------------------------------------------------------------
 
 const supervisor = new NameserverSupervisor()
+let apiProcess = null
 
 async function shutdown() {
   try {
     await supervisor.stop()
+  } catch {
+    /* ignore */
+  }
+  try {
+    await apiProcess?.stop()
   } catch {
     /* ignore */
   }
@@ -110,8 +125,7 @@ process.once('SIGINT', shutdown)
 
 if (nicConfig?.configured === true) {
   console.log('Already configured — starting services.')
-  const apiServer = await maybeInitAPI(nicConfig)
-  const apiRemoteUrl = buildRemoteUrl(nicConfig)
+  const { apiServer, apiRemoteUrl } = await startAPI(nicConfig)
   await startServer({
     configDir,
     tls,
@@ -122,11 +136,7 @@ if (nicConfig?.configured === true) {
     apiRemoteUrl,
     supervisor,
   })
-  try {
-    await supervisor.start(nicConfig)
-  } catch (err) {
-    console.error(`Supervisor start failed: ${err.message}`)
-  }
+  await startNameservers(nicConfig)
 } else {
   // ---------------------------------------------------------------------------
   // Pre-select a random port to suggest for the API in the configuration form
@@ -148,22 +158,25 @@ if (nicConfig?.configured === true) {
     suggestedPorts: { api: suggestedApiPort },
     onSaved: async (config, ctx) => {
       if (!ctx.apiServer && !ctx.apiRemoteUrl) {
-        ctx.apiServer = await maybeInitAPI(config)
-        ctx.apiRemoteUrl = buildRemoteUrl(config)
+        const started = await startAPI(config)
+        ctx.apiServer = started.apiServer
+        ctx.apiRemoteUrl = started.apiRemoteUrl
       }
-      if (ctx.supervisor) {
-        // Restart nameserver engines with the freshly saved config.
-        try {
-          await ctx.supervisor.stop()
-        } catch {
-          /* ignore */
-        }
-        try {
-          await ctx.supervisor.start(config)
-        } catch (err) {
-          console.error(`Supervisor start failed: ${err.message}`)
-        }
+      // The configurator collects nameservers, but they belong in the store,
+      // which only exists once the API is up.
+      if (ctx.pendingNameservers?.length) {
+        await saveToStore(ctx.pendingNameservers).catch((err) =>
+          console.error(`Could not save nameservers: ${err.message}`),
+        )
+        ctx.pendingNameservers = null
       }
+
+      try {
+        await ctx.supervisor?.stop()
+      } catch {
+        /* ignore */
+      }
+      await startNameservers(config)
     },
   })
 }
@@ -255,72 +268,67 @@ async function generateTLS(dir, hostname) {
 }
 
 /**
- * Read nictool.toml if it exists. Returns null if absent — the file is only
- * written when the user submits the configuration form.
+ * Start the nameserver engines described by the store. Nameservers still
+ * carried in an older bootstrap config are moved into the store first.
  */
-async function readNicToolToml(tomlPath) {
+async function startNameservers(config) {
   try {
-    return parse(await fs.readFile(tomlPath, 'utf8'))
+    const migrated = await migrateNameservers(configDir, config, writeBootstrap)
+    const nsConfig = await resolveNameserverConfig(configDir, migrated)
+    await supervisor.start(nsConfig)
   } catch (err) {
-    if (err.code !== 'ENOENT') throw err
-    return null
+    console.error(`Supervisor start failed: ${err.message}`)
   }
 }
 
-function storeTypeToEnv(type) {
-  if (type === 'directory') return 'toml'
-  return type ?? 'mysql'
-}
-
 /**
- * Return the remote API base URL (e.g. "https://api.example.com:3000") when
- * api.mode is "remote", otherwise null.
- */
-function buildRemoteUrl(config) {
-  if (!config?.api || config.api.mode !== 'remote') return null
-  const { host, port } = config.api
-  if (!host || !port) return null
-  const scheme = /^(localhost|127\.|::1)/.test(host) ? 'http' : 'https'
-  return `${scheme}://${host}:${port}`
-}
-
-/**
- * When api.mode is "local" (or unset), patch the API's mysql.toml, set
- * required env vars, and initialize the Hapi server in-process without
- * binding to any port.
+ * Bring up the API in whichever mode the bootstrap config selects.
  *
- * @returns {Promise<import('@hapi/hapi').Server|null>}
+ * @returns {Promise<{apiServer: import('@hapi/hapi').Server|null, apiRemoteUrl: string|null}>}
  */
-async function maybeInitAPI(config) {
-  if (!config || !config.api) return null
-  if (config.api.mode === 'remote') return null
+async function startAPI(config) {
+  if (!config?.api) return { apiServer: null, apiRemoteUrl: null }
 
-  const apiPkgDir = new URL('../node_modules/@nictool/api', import.meta.url).pathname
+  const mode = normalizeApiMode(config.api.mode)
+  if (mode === 'remote') {
+    return { apiServer: null, apiRemoteUrl: buildRemoteUrl(config) }
+  }
 
-  // Patch the API's mysql.toml when nictool.toml uses a mysql store
-  if (config.store?.type === 'mysql') {
-    const mysqlTomlPath = path.join(apiPkgDir, 'conf.d', 'mysql.toml')
+  applyApiEnv()
+
+  if (mode === 'tcp') {
+    const port = config.api.port
+    if (!port) {
+      console.error('api.mode is "tcp" but no api.port is set')
+      return { apiServer: null, apiRemoteUrl: null }
+    }
+    apiProcess = new ApiProcess({ configDir, port })
+    apiProcess.on('error', (err) => console.error(`API process error: ${err.message}`))
     try {
-      const content = await fs.readFile(mysqlTomlPath, 'utf8')
-      const mysqlCfg = parse(content)
-      const s = config.store
-      mysqlCfg.host = s.host ?? mysqlCfg.host
-      mysqlCfg.port = s.port ?? mysqlCfg.port
-      mysqlCfg.user = s.user ?? mysqlCfg.user
-      mysqlCfg.password = s.password ?? mysqlCfg.password
-      mysqlCfg.database = s.database ?? mysqlCfg.database
-      await fs.writeFile(mysqlTomlPath, stringify(mysqlCfg))
+      await apiProcess.start()
+      return { apiServer: null, apiRemoteUrl: apiProcess.url }
     } catch (err) {
-      console.warn(`Could not update API mysql.toml: ${err.message}`)
+      console.error(`API process failed to start: ${err.message}`)
+      return { apiServer: null, apiRemoteUrl: null }
     }
   }
 
-  // Set process env vars the API reads at init time
-  process.env.NICTOOL_DATA_STORE = storeTypeToEnv(config.store?.type)
-  if (config.store?.path) process.env.NICTOOL_DATA_STORE_PATH = config.store.path
-  if (config.store?.dsn) process.env.NICTOOL_DATA_STORE_DSN = config.store.dsn
+  return { apiServer: await initInProcessAPI(), apiRemoteUrl: null }
+}
 
+/**
+ * The API resolves its config directory and store backend at module load, so
+ * this must be set before it is first imported — hence the dynamic import in
+ * initInProcessAPI. The store itself is read by the API from etc/api.json;
+ * the server does not need to know where the data lives.
+ */
+function applyApiEnv() {
+  process.env.NICTOOL_CONF_DIR = etcDir(configDir)
+}
+
+async function initInProcessAPI() {
   try {
+    const { init: initAPI } = await import('@nictool/api/routes/index.js')
     const hapiServer = await initAPI()
     console.log('API initialized in-process')
     return hapiServer

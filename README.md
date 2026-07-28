@@ -14,25 +14,54 @@ NicTool is an open-source DNS management system. This package provides the **ser
 
 ## Process supervisor / launcher (bin/start.js)
 
-- CLI entry (nictool-server -c <dir>), reads nictool.toml. When api.mode =
-  - local: hosts the @nictool/api server in-process
-  - remote: it proxies /api/* and /doc to the remote API
-- Handles SIGINT/SIGTERM to cleanly stop nameservers.
+- CLI entry (nictool-server -c <dir>), reads etc/nictool.json. When api.mode =
+  - in_process: hosts the @nictool/api server in-process (no socket)
+  - tcp: forks the API as a supervised child on api.port and proxies to it
+  - remote: it proxies /api/\* and /doc to the remote API
+- Handles SIGINT/SIGTERM to cleanly stop nameservers and the API child.
 
 ## Nameserver supervisor (lib/nameservers.js)
 
-- Reads nameserver configs from data store, starts/stops each DNS engine
-- Supports a native in-memory authoritative server plus export engines (bind, knot, nsd, powerdns, tinydns, maradns), wiring up the right Source (mysql / toml-directory), Publisher (memory / rfc1035 / tinydns-cdb / powerdns-db), Transport (noop / rsync / axfr / db-replication), and DNSSEC Signer per engine.
+- Reads nameserver records from the data store, starts/stops each DNS engine.
+  Each record carries its own runtime config (engine, listen, publisher,
+  transport, dnssec) alongside the legacy 2.x fields.
+- Supports a native in-memory authoritative server plus export engines (bind, knot, nsd, powerdns, tinydns, maradns), wiring up the right Source (json / toml / mysql), Publisher (memory / rfc1035 / tinydns-cdb / powerdns-db), Transport (noop / rsync / axfr / db-replication), and DNSSEC Signer per engine.
 
-## PowerDNS co-process backend (bin/nt_powerdns.js)
+Publisher options, set under `[nameserver.publisher]`:
 
-- Standalone nt-powerdns binary implementing the PowerDNS pipe/co-process v1 protocol over stdin/stdout.
-- Queries the NicTool MySQL schema directly to answer Q / SOA / NS / ANY / AXFR, with a TTL cache and reconnect-on-drop.
+| type          | options                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `memory`      | — (required by the native engine)                                                                                                                                                                                                                                                                                                                                           |
+| `rfc1035`     | `path` — directory for `<zone>.zone` files. Also writes the server's own config declaring them — `named.conf`, `knot.conf` or `nsd.conf` per engine. `config.file` overrides the path; `config: false` disables it                                                                                                                                                          |
+| `tinydns-cdb` | `path` — directory for `data` + `data.cdb`; `compile` (default true) runs `tinydns-data`; `tinydnsData` overrides the binary. tinydns keeps one global data file, so any change recompiles every zone. Set `compile = false` when the binary lives on the target and a Transport compiles there.                                                                            |
+| `maradns`     | `path` — directory for `<zone>.csv2` files. MaraDNS reads csv2, not RFC 1035, so this is its own format. `config: {}` also writes a `mararc` declaring the zones, with `chroot_dir` pointing at `path`; `config.bindAddress` and `config.globals` set the rest. **`terminator: ''` for MaraDNS 1.2**, whose csv2 has no record terminator and rejects the `~` that 2.x uses |
+| `powerdns-db` | `dsn` (or `host`/`port`/`user`/`password`/`database`) for a PowerDNS **gmysql** backend; `domainType` (default `NATIVE`). This is the push model — the alternative is `nt-powerdns`, the pipe backend below, which leaves the data in NicTool. Use one or the other.                                                                                                        |
+
+Publishers default by engine: `native` → memory, `tinydns` → tinydns-cdb,
+`maradns` → maradns, everything else → rfc1035.
+
+Not yet implemented, and they throw if selected: the DNSSEC signers, `axfr` transport.
 
 ## Data model / config
 
-- Everything is driven by nictool.toml ([store], [api], [[nameserver]]). Store can be MySQL or a file directory (see data/zone.toml, data/zone_record.toml).
-- Depends on the sibling workspace packages via file:../ links: @nictool/api, dns-nameserver, dns-zone, dns-resource-record.
+Config is layered so each file holds only what is needed to reach the next layer:
+
+| File                            | Holds                                          |
+| ------------------------------- | ---------------------------------------------- |
+| `<config-dir>/etc/nictool.json` | `configured`, and how to reach the API         |
+| `<config-dir>/etc/api.json`     | the API's store connection and its own secrets |
+| the store                       | nameservers, zones, records, users, groups     |
+
+A pre-existing `etc/nictool.toml` is migrated to this layout on first start, and
+nameservers still listed in `nictool.json` are moved into the store.
+
+The one place the server reads `api.json` is to build nameserver Sources: the
+DNS engines stream zone data straight from the store rather than through the
+API, so the supervisor needs the store connection as well as the records.
+
+Store types: `json` (default) and `toml` write one file per entity into
+`store.path`; `mysql` uses a DSN. Depends on the sibling workspace packages:
+@nictool/api, dns-nameserver, dns-zone, dns-resource-record.
 
 ## Prerequisites
 
@@ -57,8 +86,12 @@ mkdir -p /var/lib/nictool
 ### 3. Start the server
 
 ```sh
-npm run server
+nictool-server -c /var/lib/nictool
 ```
+
+No build step is involved — the published package ships the built UI. (`npm run
+server` is the in-repo development equivalent; it runs Vite first and needs the
+dev dependencies.)
 
 On first run the server will:
 
@@ -67,7 +100,14 @@ On first run the server will:
 
 ### 4. Complete setup in the browser
 
-Open the URL printed to the console, fill in the configuration form, and click **Save**. The configurator writes `/var/lib/nictool/etc/nictool.toml` and starts the API automatically.
+Open the URL printed to the console and work through the four cards — installation
+type, API location, API status, and data store — then click **Save**. The
+configurator writes `/var/lib/nictool/etc/nictool.json` plus the API's
+`etc/api.json`, and starts the API automatically.
+
+Choosing **Upgrade from NicTool 2.x** points NicTool at an existing 2.x MySQL
+database. Use **Detect** to confirm the schema is found; NicTool will not create
+tables in a database that already has them.
 
 > **TLS warning** – The auto-generated certificate is self-signed. Accept the browser security warning for the initial setup, then replace it with a trusted certificate (see [TLS](#tls) below).
 
@@ -75,45 +115,63 @@ Open the URL printed to the console, fill in the configuration form, and click *
 
 ## Configuration
 
-All settings live in `<config-dir>/etc/nictool.toml`. The file is created by the web configurator but can also be edited by hand. The server reads it on every start.
+The server's own settings live in `<config-dir>/etc/nictool.json`, and the API's
+store connection in `<config-dir>/etc/api.json`. Both are created by the web
+configurator but can also be edited by hand. The server reads them on every start.
+
+To run the API on a different host, set its mode to **remote** and use the
+configurator's **Download api.json** button; drop that file into the API host's
+config directory, or point `NICTOOL_CONF_DIR` at it.
 
 ### Data store options
 
-| `store.type` | Description                                 |
-| ------------ | ------------------------------------------- |
-| `mysql`      | Production-ready; requires MySQL 8+         |
-| `directory`  | File-based TOML store; good for development |
+Set in `etc/api.json`, since the store belongs to the API.
+
+| `store.type` | Description                                              |
+| ------------ | -------------------------------------------------------- |
+| `json`       | Default. One file per entity, zero dependencies          |
+| `toml`       | Same layout, TOML codec (`directory` is the legacy name) |
+| `mysql`      | Production-ready; requires MySQL 8+                      |
 
 #### MySQL example
 
-```toml
-[store]
-type     = "mysql"
-host     = "127.0.0.1"
-port     = 3306
-user     = "nictool"
-password = "secret"
-database = "nictool"
+```json
+{
+  "store": {
+    "type": "mysql",
+    "host": "127.0.0.1",
+    "port": 3306,
+    "user": "nictool",
+    "password": "secret",
+    "database": "nictool"
+  }
+}
 ```
 
-#### Directory (file) example
+#### File example
 
-```toml
-[store]
-type = "directory"
-path = "/var/lib/nictool/zones"
+```json
+{
+  "store": { "type": "json", "path": "/var/lib/nictool/zones" }
+}
 ```
 
 ### API mode
 
-The API can run **in-process** (default) or as a **remote** service:
+Set in `etc/nictool.json`:
 
-```toml
-[api]
-mode = "local"   # "local" | "remote"
-port = 3000      # only used for remote mode
-host = ""        # only used for remote mode
+```json
+{
+  "configured": true,
+  "api": { "mode": "in_process" }
+}
 ```
+
+| `api.mode`   | Behavior                                                          |
+| ------------ | ----------------------------------------------------------------- |
+| `in_process` | Default. Hosted inside the server, no socket. `local` is an alias |
+| `tcp`        | Forked as a supervised child on `api.port`, proxied over HTTP     |
+| `remote`     | An API elsewhere; needs `api.host` and `api.port`                 |
 
 ---
 
@@ -196,69 +254,32 @@ nsec3     = true
 
 ### PowerDNS co-process backend
 
-`nt-powerdns` (`bin/nt_powerdns.js`) implements the
+`nt-powerdns` implements the
 [PowerDNS pipe/co-process backend](https://doc.powerdns.com/authoritative/backends/pipe.html)
-protocol (v1). PowerDNS forks the script and communicates with it over
-stdin/stdout; the script queries the NicTool MySQL database directly.
+protocol (v1). PowerDNS forks it and asks a question at a time over
+stdin/stdout, and it answers from the NicTool database directly — the pull
+alternative to the `powerdns-db` publisher above. Use one or the other.
 
-#### 1. Configure `pdns.conf`
-
-```ini
-launch=pipe
-pipe-command=/usr/bin/nt-powerdns
-pipe-timeout=2000
-
-# If you need more than one backend process:
-# pipe-command=/usr/bin/nt-powerdns --workers 4
-```
-
-Or, with the path from a local install:
+It ships with **[@nictool/dns-nameserver](https://github.com/NicTool/dns-nameserver)**,
+alongside the rest of the PowerDNS integration, and that package's README
+documents its environment variables and supported query types.
 
 ```ini
 launch=pipe
-pipe-command=node /var/lib/nictool/bin/nt_powerdns.js
+pipe-command=/path/to/node_modules/.bin/nt-powerdns
+pipe-abi-version=1
 pipe-timeout=2000
+
+# Required from PowerDNS 4.5 on. The pipe backend cannot enumerate zones, so
+# the zone cache has nothing to populate from and pdns_server exits at startup
+# with "One of the backends does not support zone caching".
+zone-cache-refresh-interval=0
 ```
 
-#### 2. Set environment variables
+Verified against PowerDNS Authoritative Server 5.1.3.
 
-```sh
-export NT_PDNS_DB_HOST=127.0.0.1
-export NT_PDNS_DB_PORT=3306
-export NT_PDNS_DB_USER=nictool
-export NT_PDNS_DB_PASS=secret        # required
-export NT_PDNS_DB_NAME=nictool
-export NT_PDNS_NS_ID=1               # nt_nameserver.nt_nameserver_id to serve
-export NT_PDNS_CACHE_TTL=20          # seconds to cache query results
-export NT_PDNS_LOG=0                 # set to 1 for verbose stderr logging
-```
-
-Set these in `/etc/default/pdns` (Debian/Ubuntu) so PowerDNS picks them up when it forks the co-process.
-
-#### 3. Test manually
-
-```sh
-printf 'HELO\t1\nQ\texample.com\tIN\tSOA\t-1\t127.0.0.1\n' \
-  | NT_PDNS_DB_PASS=secret node bin/nt_powerdns.js
-```
-
-Expected output:
-
-```
-OK      NicTool PowerDNS backend ready
-DATA    example.com     IN      SOA     3600    1       ns1.example.com  hostmaster.example.com  2026010101  86400  7200  1209600  3600
-END
-```
-
-#### Supported query types
-
-| Type                              | Source                                          |
-| --------------------------------- | ----------------------------------------------- |
-| A, AAAA, CNAME, MX, PTR, TXT, SRV | `nt_zone_record`                                |
-| NS                                | `nt_nameserver` via `nt_zone_nameserver`        |
-| SOA                               | `nt_zone` (serial, refresh, retry, expire, ttl) |
-| ANY                               | union of records + NS rows                      |
-| AXFR                              | all records for the requested zone id           |
+Set `NT_PDNS_DB_PASS` and friends in `/etc/default/pdns` (Debian/Ubuntu) so
+PowerDNS passes them to the co-process when it forks.
 
 ---
 

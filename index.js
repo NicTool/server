@@ -4,8 +4,19 @@ import path from 'node:path'
 import fs from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
-import { stringify } from 'smol-toml'
+import Joi from 'joi'
 import mysql from 'mysql2/promise'
+
+import {
+  API_MODES,
+  bootstrapPath,
+  buildRemoteApiConfig,
+  normalizeApiMode,
+  readApiConfig,
+  toJson,
+  writeApiConfig,
+  writeBootstrap,
+} from './lib/config.js'
 
 // .pathname is drive-relative on Windows ("/D:/a/server")
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
@@ -52,11 +63,10 @@ export async function startServer({
   onSaved = null,
   supervisor = null,
 }) {
-  const tomlPath = path.join(configDir, 'etc', 'nictool.toml')
   // ctx is mutated as services start/stop
   const ctx = {
     configDir,
-    tomlPath,
+    bootstrapFile: bootstrapPath(configDir),
     nicConfig,
     apiServer,
     apiRemoteUrl,
@@ -100,6 +110,11 @@ async function handleRequest(req, res, ctx) {
       return await checkPath(req, res, ctx)
     if (url?.startsWith('/nt/check-dsn') && method === 'GET')
       return await checkDsn(req, res)
+    if (url?.startsWith('/nt/detect-schema') && method === 'GET')
+      return await detectSchema(req, res)
+    if (url === '/nt/init-schema' && method === 'POST') return await initSchema(req, res)
+    if (url === '/nt/api-config' && method === 'GET')
+      return await serveApiConfig(res, ctx)
     if (url === '/nt/service' && method === 'GET') return serveService(res, ctx)
     if (url === '/nt/status' && method === 'GET') return await serveStatus(res, ctx)
     if (url === '/nt/nameservers/status' && method === 'GET')
@@ -107,16 +122,10 @@ async function handleRequest(req, res, ctx) {
 
     if (url?.startsWith('/api/') || url?.startsWith('/doc')) {
       if (ctx.apiServer) return await forwardToAPI(req, res, ctx.apiServer)
-      if (ctx.apiRemoteUrl) return forwardToRemote(req, res, ctx.apiRemoteUrl)
+      // Must be awaited: `return promise` inside try/catch escapes the catch.
+      if (ctx.apiRemoteUrl) return await forwardToRemote(req, res, ctx.apiRemoteUrl)
     }
 
-    if (method === 'GET' && url?.startsWith('/nictool/'))
-      return await serveStatic(
-        req,
-        res,
-        path.join(__dirname, 'node_modules', '@nictool'),
-        '/nictool/',
-      )
     if (method === 'GET')
       return await serveStatic(req, res, path.join(__dirname, 'html'), '/')
 
@@ -330,8 +339,8 @@ async function checkDsn(req, res) {
   }
 }
 
-async function serveStatus(res, { tomlPath, nicConfig, apiServer, supervisor }) {
-  const configured = await fileExists(tomlPath)
+async function serveStatus(res, { bootstrapFile, nicConfig, apiServer, supervisor }) {
+  const configured = await fileExists(bootstrapFile)
   const api = { running: apiServer != null }
   const nameservers = supervisor?.status?.() ?? []
   respond(
@@ -339,7 +348,7 @@ async function serveStatus(res, { tomlPath, nicConfig, apiServer, supervisor }) 
     200,
     'application/json',
     JSON.stringify(
-      { configured, tomlPath, config: nicConfig, api, nameservers },
+      { configured, bootstrapFile, config: nicConfig, api, nameservers },
       null,
       2,
     ),
@@ -364,38 +373,257 @@ async function saveConfig(req, res, ctx) {
     )
   }
 
-  // Strip runtime-only flags from the toml payload
-  const { startApi: _startApi, _hostname: _h, _suggested: _s, ...config } = body
+  const { startApi: _startApi, _hostname: _h, _suggested: _s, ...submitted } = body
 
-  if (!config.store?.type) {
-    return respond(
-      res,
-      400,
-      'application/json',
-      JSON.stringify({ error: 'Missing required fields' }),
-    )
-  }
-  if (config.api?.mode === 'remote' && (!config.api?.host || !(config.api?.port > 0))) {
-    return respond(
-      res,
-      400,
-      'application/json',
-      JSON.stringify({ error: 'Remote API mode requires host and port' }),
-    )
+  const invalid = validateConfig(submitted)
+  if (invalid) {
+    return respond(res, 400, 'application/json', JSON.stringify({ error: invalid }))
   }
 
-  // Mark configuration as complete — this is the flag that skips the configurator on next run
-  config.configured = true
+  const mode = normalizeApiMode(submitted.api?.mode)
+  const config = {
+    configured: true,
+    api: { ...submitted.api, mode },
+  }
+  // Nameservers belong in the store, which does not exist until the API starts.
+  // onSaved persists them once it is up.
+  ctx.pendingNameservers = Array.isArray(submitted.nameserver)
+    ? submitted.nameserver
+    : null
 
   try {
-    await fs.mkdir(path.dirname(ctx.tomlPath), { recursive: true })
-    await fs.writeFile(ctx.tomlPath, stringify(config))
+    // The store connection belongs to the API, not to the server. In remote
+    // mode there is no local API to configure — the operator downloads the
+    // same file from /nt/api-config and drops it in on the API host.
+    if (mode !== 'remote') await writeApiConfig(ctx.configDir, submitted.store)
+
+    await writeBootstrap(ctx.configDir, config)
     ctx.nicConfig = config
+    ctx.storeConfig = submitted.store
     res.on('finish', () => ctx.onSaved?.(config, ctx))
     respond(res, 200, 'application/json', JSON.stringify({ ok: true }))
   } catch (err) {
     respond(res, 500, 'application/json', JSON.stringify({ error: err.message }))
   }
+}
+
+function validateConfig(config) {
+  const schema = Joi.object({
+    install: Joi.string().valid('new', 'upgrade').default('new'),
+    api: Joi.object({
+      mode: Joi.string()
+        .valid(...API_MODES, 'local')
+        .required(),
+      host: Joi.when('mode', {
+        is: 'remote',
+        then: Joi.string().hostname().required(),
+        otherwise: Joi.string().allow('').optional(),
+      }),
+      port: Joi.when('mode', {
+        is: Joi.valid('remote', 'tcp'),
+        then: Joi.number().port().required(),
+        otherwise: Joi.number().port().optional(),
+      }),
+    }).required(),
+    store: Joi.object({
+      type: Joi.string().valid('json', 'toml', 'directory', 'mysql').required(),
+      path: Joi.when('type', {
+        is: Joi.valid('json', 'toml', 'directory'),
+        then: Joi.string().required(),
+        otherwise: Joi.string().allow('').optional(),
+      }),
+    })
+      .unknown(true)
+      .required(),
+    nameserver: Joi.array().items(Joi.object().unknown(true)).optional(),
+  }).unknown(true)
+
+  const { error } = schema.validate(config, { abortEarly: true })
+  return error ? error.message : null
+}
+
+// Tables whose presence means the target database already holds NicTool data.
+const NICTOOL_TABLES = ['nt_options', 'nt_zone']
+
+/**
+ * @param {object} [opts]
+ * @param {boolean} [opts.multipleStatements] Required to apply a schema file,
+ *   which holds many statements. Left off elsewhere so probe queries that
+ *   interpolate operator input keep the single-statement guarantee.
+ */
+async function withMysql(dsn, fn, opts = {}) {
+  const cfg = parseMysqlDsn(dsn)
+  let conn
+  try {
+    conn = await mysql.createConnection({
+      ...cfg,
+      connectTimeout: 4000,
+      multipleStatements: Boolean(opts.multipleStatements),
+    })
+    return await fn(conn, cfg)
+  } finally {
+    try {
+      await conn?.end()
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+async function findNicToolTables(conn, database) {
+  const [rows] = await conn.query(
+    'SELECT table_name AS t FROM information_schema.tables WHERE table_schema = ? AND table_name IN (?)',
+    [database, NICTOOL_TABLES],
+  )
+  return rows.map((r) => r.t ?? r.table_name)
+}
+
+/**
+ * Report whether a database already holds a NicTool schema, and which version.
+ * Drives the upgrade path: an existing 2.x database is adopted, never rebuilt.
+ */
+async function detectSchema(req, res) {
+  const dsn = new URL(req.url, 'http://x').searchParams.get('dsn')
+  if (!dsn) {
+    return respond(
+      res,
+      400,
+      'application/json',
+      JSON.stringify({ error: 'dsn required' }),
+    )
+  }
+
+  try {
+    const result = await withMysql(dsn, async (conn, cfg) => {
+      const tables = await findNicToolTables(conn, cfg.database)
+      if (!tables.length) return { ok: true, found: false, tables: [] }
+
+      let version = null
+      try {
+        const [rows] = await conn.query(
+          "SELECT option_value AS v FROM nt_options WHERE option_name = 'db_version'",
+        )
+        version = rows[0]?.v ?? null
+      } catch {
+        /* nt_zone without nt_options — still an existing install */
+      }
+      return { ok: true, found: true, version, tables }
+    })
+    respond(res, 200, 'application/json', JSON.stringify(result))
+  } catch (err) {
+    const error = err.code ? `${err.code}: ${err.message}` : err.message
+    respond(res, 200, 'application/json', JSON.stringify({ ok: false, error }))
+  }
+}
+
+/**
+ * Create the NicTool schema in an empty database.
+ *
+ * sql/*.sql is idempotent (CREATE TABLE IF NOT EXISTS / INSERT IGNORE) and the
+ * destructive cleanup lives in sql/upgrade/, which is not applied here. The
+ * refusal below is the second line of defence: adopting an existing database is
+ * the upgrade path's job, not the installer's. There is deliberately no override.
+ */
+async function initSchema(req, res) {
+  let body
+  try {
+    body = JSON.parse(await readBody(req))
+  } catch {
+    return respond(
+      res,
+      400,
+      'application/json',
+      JSON.stringify({ error: 'Invalid JSON' }),
+    )
+  }
+
+  if (body.install === 'upgrade') {
+    return respond(
+      res,
+      409,
+      'application/json',
+      JSON.stringify({ error: 'Refusing to initialize a schema during an upgrade' }),
+    )
+  }
+  if (!body.dsn) {
+    return respond(
+      res,
+      400,
+      'application/json',
+      JSON.stringify({ error: 'dsn required' }),
+    )
+  }
+
+  try {
+    const result = await withMysql(
+      body.dsn,
+      async (conn, cfg) => {
+        const existing = await findNicToolTables(conn, cfg.database)
+        if (existing.length) return { conflict: existing }
+
+        const applied = []
+        for (const file of await sqlFiles()) {
+          await conn.query(await fs.readFile(file, 'utf8'))
+          applied.push(path.basename(file))
+        }
+        return { applied }
+      },
+      { multipleStatements: true },
+    )
+
+    if (result.conflict) {
+      return respond(
+        res,
+        409,
+        'application/json',
+        JSON.stringify({
+          error: `Database already contains NicTool tables (${result.conflict.join(', ')}). Choose "upgrade" to adopt it.`,
+        }),
+      )
+    }
+    respond(
+      res,
+      200,
+      'application/json',
+      JSON.stringify({ ok: true, applied: result.applied }),
+    )
+  } catch (err) {
+    const error = err.code ? `${err.code}: ${err.message}` : err.message
+    respond(res, 500, 'application/json', JSON.stringify({ ok: false, error }))
+  }
+}
+
+async function sqlFiles() {
+  const dir = path.join(
+    path.dirname(fileURLToPath(import.meta.resolve('@nictool/api/server.js'))),
+    'sql',
+  )
+  const entries = await fs.readdir(dir)
+  return entries
+    .filter((f) => f.endsWith('.sql'))
+    .sort()
+    .map((f) => path.join(dir, f))
+}
+
+/**
+ * The API's config file, for an operator to drop in on a remote API host.
+ */
+async function serveApiConfig(res, ctx) {
+  const store = ctx.storeConfig ?? (await readApiConfig(ctx.configDir))?.store
+  if (!store) {
+    return respond(
+      res,
+      404,
+      'application/json',
+      JSON.stringify({ error: 'No store configured yet' }),
+    )
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'application/json',
+    'Content-Disposition': 'attachment; filename="api.json"',
+  })
+  res.end(toJson(buildRemoteApiConfig(store)))
 }
 
 // ---------------------------------------------------------------------------
@@ -445,7 +673,23 @@ function forwardToRemote(req, res, remoteBaseUrl) {
     if (req.headers[hdr]) forwardHeaders[hdr] = req.headers[hdr]
   }
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
+    // An unreachable API is an expected state — it restarts, and a remote one
+    // can be down — so answer 502 rather than faulting the whole server.
+    const fail = (err) => {
+      if (!res.headersSent) {
+        respond(
+          res,
+          502,
+          'application/json',
+          JSON.stringify({ error: `API unreachable: ${err.code ?? err.message}` }),
+        )
+      } else {
+        res.end()
+      }
+      resolve()
+    }
+
     const upReq = mod.request(
       {
         hostname: target.hostname,
@@ -465,10 +709,10 @@ function forwardToRemote(req, res, remoteBaseUrl) {
           res.end(Buffer.concat(chunks))
           resolve()
         })
-        upRes.on('error', reject)
+        upRes.on('error', fail)
       },
     )
-    upReq.on('error', reject)
+    upReq.on('error', fail)
     req.pipe(upReq)
   })
 }
