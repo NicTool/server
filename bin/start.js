@@ -8,6 +8,8 @@ import path from 'node:path'
 import process from 'node:process'
 import { parseArgs, promisify } from 'node:util'
 
+import { AxfrServer, FileSource, MysqlSource } from '@nictool/dns-nameserver'
+
 import { startServer } from '../index.js'
 import ApiProcess from '../lib/api-process.js'
 import NameserverSupervisor from '../lib/nameservers.js'
@@ -18,11 +20,7 @@ import {
   readBootstrap,
   writeBootstrap,
 } from '../lib/config.js'
-import {
-  migrateNameservers,
-  resolveNameserverConfig,
-  saveToStore,
-} from '../lib/nameserver-config.js'
+import { migrateNameservers, resolveNameserverConfig } from '../lib/nameserver-config.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -106,10 +104,16 @@ const port =
 
 const supervisor = new NameserverSupervisor()
 let apiProcess = null
+let axfrServer = null
 
 async function shutdown() {
   try {
     await supervisor.stop()
+  } catch {
+    /* ignore */
+  }
+  try {
+    await axfrServer?.stop()
   } catch {
     /* ignore */
   }
@@ -125,7 +129,7 @@ process.once('SIGINT', shutdown)
 
 if (nicConfig?.configured === true) {
   console.log('Already configured — starting services.')
-  const { apiServer, apiRemoteUrl } = await startAPI(nicConfig)
+  const { apiServer, apiRemoteUrl, pid } = await startAPI(nicConfig)
   await startServer({
     configDir,
     tls,
@@ -134,7 +138,10 @@ if (nicConfig?.configured === true) {
     nicConfig,
     apiServer,
     apiRemoteUrl,
+    apiPid: pid,
     supervisor,
+    startApi: startAPI,
+    stopApi: stopAPI,
   })
   await startNameservers(nicConfig)
 } else {
@@ -156,21 +163,16 @@ if (nicConfig?.configured === true) {
     nicConfig,
     supervisor,
     suggestedPorts: { api: suggestedApiPort },
+    startApi: startAPI,
+    stopApi: stopAPI,
     onSaved: async (config, ctx) => {
       if (!ctx.apiServer && !ctx.apiRemoteUrl) {
         const started = await startAPI(config)
         ctx.apiServer = started.apiServer
         ctx.apiRemoteUrl = started.apiRemoteUrl
+        ctx.apiMode = normalizeApiMode(config.api?.mode)
+        ctx.apiPid = started.pid ?? null
       }
-      // The configurator collects nameservers, but they belong in the store,
-      // which only exists once the API is up.
-      if (ctx.pendingNameservers?.length) {
-        await saveToStore(ctx.pendingNameservers).catch((err) =>
-          console.error(`Could not save nameservers: ${err.message}`),
-        )
-        ctx.pendingNameservers = null
-      }
-
       try {
         await ctx.supervisor?.stop()
       } catch {
@@ -276,15 +278,71 @@ async function startNameservers(config) {
     const migrated = await migrateNameservers(configDir, config, writeBootstrap)
     const nsConfig = await resolveNameserverConfig(configDir, migrated)
     await supervisor.start(nsConfig)
+    await startAxfrServer(config, nsConfig)
   } catch (err) {
     console.error(`Supervisor start failed: ${err.message}`)
   }
 }
 
 /**
+ * Answer zone transfers, when `axfr` is configured, so a secondary can pull
+ * from NicTool rather than from a primary NicTool feeds.
+ *
+ * It is not a nameserver and does not go through the supervisor: it publishes
+ * nothing and reads the Source directly, so it serves whatever is current
+ * rather than whatever was last published. Authorization comes from the same
+ * nameserver records the supervisor uses — a peer is matched by address, and
+ * gets exactly the zones assigned to it.
+ */
+async function startAxfrServer(config, nsConfig) {
+  const axfr = config?.axfr
+  if (!axfr?.listen?.length) return
+
+  try {
+    const source = buildAxfrSource(nsConfig.store)
+    axfrServer = new AxfrServer({
+      listen: axfr.listen,
+      source,
+      nameservers: nsConfig.nameserver ?? [],
+      maxMessageSize: axfr.maxMessageSize,
+    })
+    axfrServer.on('error', (err) => console.error(`AXFR: ${err.message}`))
+    axfrServer.on('refused', (d) =>
+      console.warn(`AXFR refused ${d.zone} to ${d.peer}: ${d.reason}`),
+    )
+    await axfrServer.start()
+    const where = axfrServer
+      .addresses()
+      .map((a) => `${a.address}:${a.port}`)
+      .join(', ')
+    console.log(`AXFR listener: ${where} (${axfrServer.status().authorized} peers)`)
+  } catch (err) {
+    console.error(`AXFR listener failed to start: ${err.message}`)
+    axfrServer = null
+  }
+}
+
+function buildAxfrSource(store) {
+  switch (store?.type) {
+    case 'mysql':
+      return new MysqlSource(store)
+    case 'json':
+      return new FileSource({ path: store.path, format: 'json' })
+    case 'toml':
+    case 'directory':
+      return new FileSource({ path: store.path, format: 'toml' })
+    default:
+      throw new Error(`unsupported store type for AXFR: ${store?.type ?? '(missing)'}`)
+  }
+}
+
+/**
  * Bring up the API in whichever mode the bootstrap config selects.
  *
- * @returns {Promise<{apiServer: import('@hapi/hapi').Server|null, apiRemoteUrl: string|null}>}
+ * Failures are reported rather than thrown: at boot the configurator must stay
+ * reachable so the operator can correct the config that broke the start.
+ *
+ * @returns {Promise<{apiServer: import('@hapi/hapi').Server|null, apiRemoteUrl: string|null, error?: string}>}
  */
 async function startAPI(config) {
   if (!config?.api) return { apiServer: null, apiRemoteUrl: null }
@@ -299,21 +357,39 @@ async function startAPI(config) {
   if (mode === 'tcp') {
     const port = config.api.port
     if (!port) {
-      console.error('api.mode is "tcp" but no api.port is set')
-      return { apiServer: null, apiRemoteUrl: null }
+      const error = 'api.mode is "tcp" but no api.port is set'
+      console.error(error)
+      return { apiServer: null, apiRemoteUrl: null, error }
     }
     apiProcess = new ApiProcess({ configDir, port })
     apiProcess.on('error', (err) => console.error(`API process error: ${err.message}`))
     try {
       await apiProcess.start()
-      return { apiServer: null, apiRemoteUrl: apiProcess.url }
+      return {
+        apiServer: null,
+        apiRemoteUrl: apiProcess.url,
+        pid: apiProcess.child?.pid ?? null,
+      }
     } catch (err) {
       console.error(`API process failed to start: ${err.message}`)
-      return { apiServer: null, apiRemoteUrl: null }
+      apiProcess = null
+      return { apiServer: null, apiRemoteUrl: null, error: err.message }
     }
   }
 
-  return { apiServer: await initInProcessAPI(), apiRemoteUrl: null }
+  return initInProcessAPI()
+}
+
+/**
+ * Shut down whichever local API startAPI brought up. A remote API is not ours
+ * to stop, so only the caller's reference to it is dropped.
+ */
+async function stopAPI(ctx) {
+  if (apiProcess) {
+    await apiProcess.stop()
+    apiProcess = null
+  }
+  await ctx.apiServer?.stop()
 }
 
 /**
@@ -329,12 +405,12 @@ function applyApiEnv() {
 async function initInProcessAPI() {
   try {
     const { init: initAPI } = await import('@nictool/api/routes/index.js')
-    const hapiServer = await initAPI()
+    const apiServer = await initAPI()
     console.log('API initialized in-process')
-    return hapiServer
+    return { apiServer, apiRemoteUrl: null, pid: process.pid }
   } catch (err) {
     console.error(`API init failed: ${err.message}`)
-    return null
+    return { apiServer: null, apiRemoteUrl: null, error: err.message }
   }
 }
 

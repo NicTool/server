@@ -117,6 +117,13 @@
           box-shadow 0.1s;
       }
 
+      input:disabled,
+      select:disabled {
+        background: #f6f8fa;
+        color: #57606a;
+        cursor: not-allowed;
+      }
+
       input:focus,
       select:focus {
         outline: none;
@@ -171,6 +178,36 @@
         color: #57606a;
       }
 
+      /* ---- API run state: dim = stopped, green = running, red = failed ---- */
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: #8c959f;
+      }
+      .status::before {
+        content: '';
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+      .status.ok {
+        color: #1a7f37;
+      }
+      .status.err {
+        color: #cf222e;
+      }
+
+      .inline-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-top: 0.6rem;
+      }
+
       /* ---- separator between store sub-sections ---- */
       .db-sep {
         width: 100%;
@@ -179,144 +216,27 @@
         margin: 0.75rem 0 0.25rem;
       }
 
-      /* ---- nameserver table ---- */
-      .ns-grid {
-        width: 100%;
-        border-collapse: collapse;
-      }
-
-      .ns-grid th {
-        text-align: left;
-        font-size: 0.7rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        color: #57606a;
-        padding: 0 6px 6px;
-      }
-
-      .ns-grid td {
-        padding: 3px 6px;
-        vertical-align: middle;
-      }
-
-      .ns-grid td:last-child {
-        padding-right: 0;
-        width: 28px;
-      }
-
-      .ns-grid input,
-      .ns-grid select {
-        height: 28px;
-        font-size: 0.8rem;
-      }
-
-      .ns-grid tr.ns-row:not(:first-child) > td {
-        padding-top: 4px;
-      }
-
-      .ns-expand {
-        background: #f6f8fa;
-        border: 1px solid #d0d7de;
-        border-radius: 6px;
-        padding: 10px 12px;
-        margin: 4px 6px 10px;
-        display: none;
-      }
-      .ns-expand.open {
-        display: block;
-      }
-      .ns-expand h3 {
-        font-size: 0.72rem;
-        font-weight: 600;
-        color: #57606a;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        margin: 6px 0 4px;
-      }
-      .ns-expand .fields {
-        gap: 0.5rem 1rem;
-      }
-
-      .listen-grid {
-        width: 100%;
-        border-collapse: collapse;
-        margin-bottom: 4px;
-      }
-      .listen-grid th {
-        padding: 0 4px 2px;
-        font-size: 0.65rem;
-        color: #57606a;
-        text-align: left;
-      }
-      .listen-grid td {
-        padding: 2px 4px;
-      }
-      .listen-grid input,
-      .listen-grid select {
-        height: 26px;
-        font-size: 0.78rem;
-      }
-      .listen-grid td:last-child {
-        width: 24px;
-        padding-right: 0;
-      }
-
-      .btn-add-inline {
-        padding: 2px 8px;
-        font-size: 0.72rem;
-        border: 1px dashed #d0d7de;
-        border-radius: 4px;
-        background: none;
-        cursor: pointer;
-        color: #0969da;
-      }
-
-      .btn-expand {
-        background: none;
-        border: 1px solid #d0d7de;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 0.75rem;
-        color: #57606a;
-        padding: 2px 6px;
-      }
-      .btn-expand.open {
-        background: #ddf4ff;
-        color: #0969da;
-        border-color: #0969da;
-      }
-
       /* ---- buttons ---- */
-      .btn-add {
-        margin-top: 0.75rem;
-        padding: 4px 10px;
+      .btn-toggle {
+        height: 30px;
+        padding: 0 14px;
         font-size: 0.8rem;
         font-family: inherit;
-        border: 1px dashed #d0d7de;
+        font-weight: 500;
+        border: 1px solid #d0d7de;
         border-radius: 6px;
-        background: none;
+        background: #f6f8fa;
+        color: #1f2328;
         cursor: pointer;
-        color: #0969da;
+        white-space: nowrap;
       }
-      .btn-add:hover {
-        background: #f0f7ff;
-        border-color: #0969da;
+      .btn-toggle:not(:disabled):hover {
+        background: #eef0f2;
+        border-color: #8c959f;
       }
-
-      .btn-remove {
-        background: none;
-        border: none;
-        cursor: pointer;
+      .btn-toggle:disabled {
         color: #8c959f;
-        font-size: 1rem;
-        line-height: 1;
-        padding: 2px 4px;
-        border-radius: 4px;
-      }
-      .btn-remove:hover {
-        background: #ffebe9;
-        color: #cf222e;
+        cursor: not-allowed;
       }
 
       .btn-save {
@@ -383,12 +303,16 @@
             <div id="upgrade-note" style="display: none; margin-top: 0.75rem">
               <p class="field-note">
                 An upgrade adopts the MySQL database from your existing NicTool 2.x
-                install. The data store below is locked to MySQL; enter its DSN and click
-                <strong>Detect</strong> to confirm the schema is found. NicTool will never
-                re-create tables in a database that already has them.
+                install. The data store below is locked to MySQL; its schema is probed as
+                soon as the connection succeeds. NicTool will never re-create tables in a
+                database that already has them.
               </p>
-              <button type="button" id="detect-schema">Detect existing schema</button>
-              <span class="field-note" id="n-detect"></span>
+              <div class="inline-row">
+                <button type="button" class="btn-toggle" id="detect-schema">
+                  Re-probe schema
+                </button>
+                <span class="field-note" id="n-detect"></span>
+              </div>
             </div>
           </div>
         </div>
@@ -397,6 +321,7 @@
         <div class="card">
           <div class="card-header">
             <h2>API Service</h2>
+            <span class="status" id="api-status">not started</span>
             <span class="badge pending" id="b-api">—</span>
           </div>
           <div class="card-body">
@@ -408,9 +333,16 @@
                   <option value="tcp">local, on a TCP port</option>
                   <option value="remote">remote</option>
                 </select>
-                <span class="field-note" id="n-api-mode">How the API is reached</span>
+                <span class="field-note" id="n-api-mode"></span>
+              </div>
+              <div class="field" id="f-api-toggle">
+                <button type="button" class="btn-toggle" id="btn-api-toggle">
+                  Start API
+                </button>
+                <span class="field-note" id="n-api-toggle"></span>
               </div>
             </div>
+            <p class="field-note" id="n-api-detail"></p>
             <div id="api-remote-fields" style="display: none; margin-top: 0.75rem">
               <div class="fields">
                 <div class="field wide">
@@ -446,18 +378,6 @@
           </div>
         </div>
 
-        <!-- ===== API Bootstrap ===== -->
-        <div class="card">
-          <div class="card-header">
-            <h2>API Status</h2>
-            <span class="badge pending" id="b-boot">—</span>
-          </div>
-          <div class="card-body">
-            <p class="field-note" id="boot-status">not started</p>
-            <p class="field-note" id="boot-detail"></p>
-          </div>
-        </div>
-
         <!-- ===== Data Store ===== -->
         <div class="card">
           <div class="card-header">
@@ -465,6 +385,7 @@
             <span class="badge pending" id="b-store">—</span>
           </div>
           <div class="card-body">
+            <p class="field-note" id="n-store-lock"></p>
             <div class="fields">
               <div class="field narrow">
                 <label for="store-type">Type</label>
@@ -562,36 +483,12 @@
           </div>
         </div>
 
-        <!-- ===== Nameservers ===== -->
-        <div class="card">
-          <div class="card-header">
-            <h2>Nameservers</h2>
-            <span class="badge pending" id="b-ns">—</span>
-          </div>
-          <div class="card-body">
-            <table class="ns-grid">
-              <thead>
-                <tr>
-                  <th style="min-width: 200px">Name</th>
-                  <th style="width: 120px">Engine</th>
-                  <th style="width: 120px">Transport</th>
-                  <th style="width: 40px"></th>
-                  <th style="width: 28px"></th>
-                </tr>
-              </thead>
-              <tbody id="ns-body"></tbody>
-            </table>
-            <button type="button" class="btn-add" id="btn-add-ns">
-              + Add nameserver
-            </button>
-          </div>
-        </div>
-
         <div class="save-bar">
           <button type="submit" class="btn-save" id="btn-save" disabled>
             Save Configuration
           </button>
           <span id="save-msg"></span>
+          <span class="field-note" id="save-reason"></span>
         </div>
       </form>
     </div>
@@ -599,7 +496,6 @@
     <script>
       'use strict'
 
-      let _rowSeq = 0
       let _serverHostname = ''
 
       // -------------------------------------------------------------------------
@@ -814,6 +710,8 @@
         document.getElementById('download-api-config').style.display = isRemote
           ? ''
           : 'none'
+        // Only a local API is ours to start.
+        document.getElementById('f-api-toggle').style.display = isRemote ? 'none' : ''
 
         if (!needsPort) {
           setBadge('b-api', true, false)
@@ -862,12 +760,16 @@
         return ok
       }
 
+      // The DSN this ran against, so a connection check that re-fires for an
+      // unchanged DSN does not re-probe.
+      let _schemaProbedDsn = null
+
       async function detectSchema() {
         const dsn = dsnFromFields()
         const note = document.getElementById('n-detect')
         if (!dsn) {
           note.textContent = 'Enter the database connection below first'
-          note.className = 'field-note bad'
+          note.className = 'field-note err'
           return
         }
 
@@ -886,471 +788,73 @@
             _schemaFound = true
             note.textContent = `Found NicTool schema${data.version ? ' v' + data.version : ''}`
           }
-          note.className = 'field-note ' + (_schemaFound ? 'ok' : 'bad')
+          note.className = 'field-note ' + (_schemaFound ? 'ok' : 'err')
         } catch (err) {
           _schemaFound = false
           note.textContent = err.message
-          note.className = 'field-note bad'
+          note.className = 'field-note err'
         }
         validateAll()
       }
 
-      const ENGINE_OPTIONS = [
-        'native',
-        'bind',
-        'knot',
-        'nsd',
-        'powerdns',
-        'tinydns',
-        'maradns',
-      ]
-      const PUBLISHER_BY_ENGINE = {
-        native: 'memory',
-        bind: 'rfc1035',
-        knot: 'rfc1035',
-        nsd: 'rfc1035',
-        powerdns: 'rfc1035',
-        tinydns: 'tinydns-cdb',
-        // MaraDNS reads csv2 zone files, not RFC 1035.
-        maradns: 'maradns',
-      }
-      const TRANSPORT_OPTIONS = ['noop', 'axfr', 'rsync', 'db-replication']
-      const DNSSEC_ALGOS = [
-        'RSASHA256',
-        'RSASHA512',
-        'ECDSAP256SHA256',
-        'ECDSAP384SHA384',
-        'ED25519',
-        'ED448',
-      ]
-
-      function isValidName(v) {
-        return typeof v === 'string' && v.trim().length > 0
-      }
-
-      function validateNsRow(id) {
-        const nameEl = document.getElementById('ns-name-' + id)
-        const engineEl = document.getElementById('ns-engine-' + id)
-        const transportEl = document.getElementById('ns-transport-type-' + id)
-
-        if (!nameEl) return true // row removed
-
-        const nameOk = isValidName(nameEl.value)
-        nameEl.classList.toggle('valid', nameOk)
-        nameEl.classList.toggle('invalid', !nameOk)
-
-        // Engine=native requires at least one listen row with valid address+port.
-        let listenOk = true
-        if (engineEl.value === 'native') {
-          const listenRows = document.querySelectorAll(
-            `#ns-listen-body-${id} tr.listen-row`,
-          )
-          if (listenRows.length === 0) listenOk = false
-          for (const row of listenRows) {
-            const a = row.querySelector('.listen-address').value.trim()
-            const p = row.querySelector('.listen-port').value.trim()
-            if (!a || !isValidPort(p)) {
-              listenOk = false
-              break
-            }
-          }
-        }
-
-        // Publisher path required for file-based engines.
-        let publisherOk = true
-        if (engineEl.value !== 'native') {
-          const pathEl = document.getElementById('ns-publisher-path-' + id)
-          if (!pathEl || pathEl.value.trim().length === 0) publisherOk = false
-        }
-
-        // Transport type must be selected (always is via default).
-        const transportOk = TRANSPORT_OPTIONS.includes(transportEl.value)
-
-        return nameOk && listenOk && publisherOk && transportOk
-      }
-
-      function validateNS() {
-        const rows = document.querySelectorAll('#ns-body tr.ns-row')
-        if (rows.length === 0) {
-          setBadge('b-ns', false, false)
-          return false
-        }
-
-        let ok = true
-        for (const row of rows) {
-          if (!validateNsRow(Number(row.dataset.id))) ok = false
-        }
-        setBadge('b-ns', ok, false)
-        return ok
+      // "Connected" only means the credentials work. For an upgrade the question
+      // is whether a 2.x schema is in there, so chain that probe off the
+      // connection rather than making the operator find a button.
+      function probeSchemaWhenConnected(dsn) {
+        if (!isUpgrade() || !dsn || dsn === _schemaProbedDsn) return
+        _schemaProbedDsn = dsn
+        detectSchema()
       }
 
       function validateAll() {
         const i = validateInstall()
         const s = validateStore()
         const a = validateAPI()
-        validateNS()
-        // Only Install + Store + API required to enable Save
+
         document.getElementById('btn-save').disabled = !(i && s && a)
+        document.getElementById('save-reason').textContent = saveBlockedReason(i, s, a)
+        syncApiToggle(s && a)
+        syncStoreLock()
         return i && s && a
       }
 
-      // -------------------------------------------------------------------------
-      // Nameserver rows
-      // -------------------------------------------------------------------------
-
-      // Normalize a config row from the old shape {host, port, type, exportType}
-      // into the richer shape used by the UI + supervisor.
-      function migrateLegacyNs(ns) {
-        if (!ns) return {}
-        if (ns.engine) return ns // already new shape
-        const out = { ...ns }
-        if (ns.type === 'native' || !ns.type) {
-          out.engine = 'native'
-          if (ns.host && ns.port) {
-            out.listen = [{ address: ns.host, port: Number(ns.port), proto: 'udp' }]
-          }
-        } else {
-          // Legacy "export" NS — default to bind so user can refine.
-          out.engine = 'bind'
-          out.publisher = { type: 'rfc1035', path: ns.path || '' }
-          out.transport = {
-            type:
-              ns.exportType === 'database' ? 'db-replication' : ns.exportType || 'rsync',
-            interval: 300,
-            cooldown: 5,
-          }
-        }
-        return out
+      // A disabled Save with no explanation is the easiest way to strand someone
+      // on this page — an upgrade in particular blocks until the schema is probed.
+      function saveBlockedReason(installOk, storeOk, apiOk) {
+        const todo = []
+        if (!installOk)
+          todo.push(
+            isUpgrade()
+              ? _schemaFound === null
+                ? 'connect to the 2.x database below so its schema can be probed'
+                : 'point the data store at a database holding a NicTool schema'
+              : 'set the install type',
+          )
+        if (!storeOk) todo.push('complete the data store')
+        if (!apiOk) todo.push('complete the API settings')
+        return todo.length ? `To save, ${todo.join(', then ')}.` : ''
       }
 
-      function addNsRow(nsIn) {
-        const ns = migrateLegacyNs(nsIn)
-        const id = _rowSeq++
+      // The API resolves its store once, at startup. Editing these fields under a
+      // running API would describe a store it is not using.
+      const STORE_FIELDS = [
+        'store-path',
+        'db-dsn',
+        'db-host',
+        'db-port',
+        'db-user',
+        'db-password',
+        'db-name',
+      ]
 
-        const defaultName = ns.name || `ns${id + 1}.example.com.`
-        const defaultEngine = ns.engine || 'native'
-        const defaultTransport =
-          ns.transport?.type || (defaultEngine === 'native' ? 'noop' : 'rsync')
-        const defaultInterval =
-          ns.transport?.interval ?? (defaultEngine === 'native' ? 0 : 300)
-        const defaultCooldown = ns.transport?.cooldown ?? 5
-        const defaultPublisherPath = ns.publisher?.path ?? ''
-
-        const tbody = document.getElementById('ns-body')
-
-        // --- primary row ---
-        const tr = document.createElement('tr')
-        tr.className = 'ns-row'
-        tr.dataset.id = id
-
-        // name cell
-        const tdName = document.createElement('td')
-        const inName = document.createElement('input')
-        inName.type = 'text'
-        inName.id = 'ns-name-' + id
-        inName.value = defaultName
-        inName.placeholder = 'ns1.example.com.'
-        inName.autocomplete = 'off'
-        inName.addEventListener('input', () => {
-          validateNsRow(id)
-          validateAll()
-        })
-        tdName.appendChild(inName)
-        tr.appendChild(tdName)
-
-        // engine cell
-        const tdEngine = document.createElement('td')
-        const selEngine = document.createElement('select')
-        selEngine.id = 'ns-engine-' + id
-        for (const val of ENGINE_OPTIONS) {
-          const opt = document.createElement('option')
-          opt.value = val
-          opt.textContent = val
-          if (defaultEngine === val) opt.selected = true
-          selEngine.appendChild(opt)
+      function syncStoreLock() {
+        for (const id of STORE_FIELDS) {
+          document.getElementById(id).disabled = _apiRunning
         }
-        selEngine.addEventListener('change', () => {
-          onEngineChange(id)
-          validateNsRow(id)
-          validateAll()
-        })
-        tdEngine.appendChild(selEngine)
-        tr.appendChild(tdEngine)
-
-        // transport cell (top-level summary; details in expand panel)
-        const tdTransport = document.createElement('td')
-        const selTransport = document.createElement('select')
-        selTransport.id = 'ns-transport-type-' + id
-        for (const val of TRANSPORT_OPTIONS) {
-          const opt = document.createElement('option')
-          opt.value = val
-          opt.textContent = val
-          if (defaultTransport === val) opt.selected = true
-          selTransport.appendChild(opt)
-        }
-        selTransport.addEventListener('change', () => {
-          validateNsRow(id)
-          validateAll()
-        })
-        tdTransport.appendChild(selTransport)
-        tr.appendChild(tdTransport)
-
-        // expand toggle cell
-        const tdExpand = document.createElement('td')
-        const btnExpand = document.createElement('button')
-        btnExpand.type = 'button'
-        btnExpand.className = 'btn-expand'
-        btnExpand.textContent = '▾'
-        btnExpand.title = 'Advanced'
-        btnExpand.addEventListener('click', () => {
-          const panel = document.getElementById('ns-expand-' + id)
-          const open = panel.classList.toggle('open')
-          btnExpand.classList.toggle('open', open)
-        })
-        tdExpand.appendChild(btnExpand)
-        tr.appendChild(tdExpand)
-
-        // remove button cell
-        const tdRemove = document.createElement('td')
-        const btnRemove = document.createElement('button')
-        btnRemove.type = 'button'
-        btnRemove.className = 'btn-remove'
-        btnRemove.title = 'Remove'
-        btnRemove.innerHTML = '&times;'
-        btnRemove.addEventListener('click', () => {
-          tr.remove()
-          trExpand.remove()
-          validateAll()
-        })
-        tdRemove.appendChild(btnRemove)
-        tr.appendChild(tdRemove)
-
-        tbody.appendChild(tr)
-
-        // --- expand row (full-width single cell containing the advanced panel) ---
-        const trExpand = document.createElement('tr')
-        trExpand.className = 'ns-expand-row'
-        const tdExpandCell = document.createElement('td')
-        tdExpandCell.colSpan = 5
-        tdExpandCell.style.padding = '0'
-
-        const panel = document.createElement('div')
-        panel.className = 'ns-expand'
-        panel.id = 'ns-expand-' + id
-        panel.innerHTML = renderExpandPanel(
-          id,
-          ns,
-          defaultPublisherPath,
-          defaultInterval,
-          defaultCooldown,
-        )
-        tdExpandCell.appendChild(panel)
-        trExpand.appendChild(tdExpandCell)
-        tbody.appendChild(trExpand)
-
-        // Seed listen rows from config (default one row for native)
-        if (defaultEngine === 'native') {
-          const listen =
-            Array.isArray(ns.listen) && ns.listen.length
-              ? ns.listen
-              : [{ address: '127.0.0.1', port: 53, proto: 'udp' }]
-          for (const l of listen) addListenRow(id, l)
-        }
-
-        wireExpandPanel(id)
-        onEngineChange(id)
-        validateNsRow(id)
-        validateAll()
-      }
-
-      function renderExpandPanel(id, ns, pubPath, interval, cooldown) {
-        const d = ns.dnssec || {}
-        const t = ns.transport || {}
-        return `
-      <div id="ns-native-${id}">
-        <h3>Listen</h3>
-        <table class="listen-grid">
-          <thead><tr>
-            <th>Address</th><th style="width:80px">Port</th><th style="width:70px">Proto</th><th></th>
-          </tr></thead>
-          <tbody id="ns-listen-body-${id}"></tbody>
-        </table>
-        <button type="button" class="btn-add-inline" id="ns-listen-add-${id}">+ Add listener</button>
-      </div>
-      <div id="ns-export-${id}">
-        <h3>Publisher</h3>
-        <div class="fields">
-          <div class="field wide">
-            <label>Zone Output Path</label>
-            <input type="text" id="ns-publisher-path-${id}" value="${escapeAttr(pubPath)}" placeholder="./data/zones-out">
-          </div>
-        </div>
-      </div>
-      <h3>Transport</h3>
-      <div class="fields">
-        <div class="field narrow">
-          <label>Interval (s)</label>
-          <input type="number" id="ns-transport-interval-${id}" min="0" value="${Number(interval) || 0}">
-          <span class="field-note">0 = event-driven</span>
-        </div>
-        <div class="field narrow">
-          <label>Cooldown (s)</label>
-          <input type="number" id="ns-transport-cooldown-${id}" min="0" value="${Number(cooldown) || 5}">
-        </div>
-        <div class="field wide" id="ns-transport-remote-wrap-${id}" style="display:none">
-          <label>Remote (rsync)</label>
-          <input type="text" id="ns-transport-remote-${id}" value="${escapeAttr(t.remote || '')}" placeholder="user@host:/etc/bind/zones">
-        </div>
-        <div class="field wide" id="ns-transport-master-wrap-${id}" style="display:none">
-          <label>Master (AXFR)</label>
-          <input type="text" id="ns-transport-master-${id}" value="${escapeAttr(t.master || '')}" placeholder="127.0.0.1">
-        </div>
-      </div>
-      <h3>DNSSEC</h3>
-      <div class="fields">
-        <div class="field narrow">
-          <label>Enabled</label>
-          <select id="ns-dnssec-enabled-${id}">
-            <option value="false" ${!d.enabled ? 'selected' : ''}>no</option>
-            <option value="true"  ${d.enabled ? 'selected' : ''}>yes</option>
-          </select>
-        </div>
-        <div class="field wide">
-          <label>Algorithm</label>
-          <select id="ns-dnssec-algo-${id}">
-            <option value="">—</option>
-            ${DNSSEC_ALGOS.map((a) => `<option value="${a}" ${d.algorithm === a ? 'selected' : ''}>${a}</option>`).join('')}
-          </select>
-        </div>
-        <div class="field wide">
-          <label>Keyset</label>
-          <input type="text" id="ns-dnssec-keyset-${id}" value="${escapeAttr(d.keyset || '')}" placeholder="./data/dnssec/ns1">
-        </div>
-        <div class="field narrow">
-          <label>NSEC3</label>
-          <select id="ns-dnssec-nsec3-${id}">
-            <option value="false" ${!d.nsec3 ? 'selected' : ''}>no</option>
-            <option value="true"  ${d.nsec3 ? 'selected' : ''}>yes</option>
-          </select>
-        </div>
-      </div>
-    `
-      }
-
-      function escapeAttr(s) {
-        return String(s == null ? '' : s)
-          .replace(/"/g, '&quot;')
-          .replace(/</g, '&lt;')
-      }
-
-      function wireExpandPanel(id) {
-        const btn = document.getElementById('ns-listen-add-' + id)
-        if (btn) btn.addEventListener('click', () => addListenRow(id))
-
-        for (const k of ['interval', 'cooldown', 'remote', 'master']) {
-          const el = document.getElementById(`ns-transport-${k}-${id}`)
-          if (el)
-            el.addEventListener('input', () => {
-              validateNsRow(id)
-              validateAll()
-            })
-        }
-        for (const k of ['enabled', 'algo', 'keyset', 'nsec3']) {
-          const el = document.getElementById(`ns-dnssec-${k}-${id}`)
-          if (el) el.addEventListener('change', validateAll)
-        }
-        const pathEl = document.getElementById('ns-publisher-path-' + id)
-        if (pathEl)
-          pathEl.addEventListener('input', () => {
-            validateNsRow(id)
-            validateAll()
-          })
-
-        const transEl = document.getElementById('ns-transport-type-' + id)
-        if (transEl) transEl.addEventListener('change', () => onTransportTypeChange(id))
-        onTransportTypeChange(id)
-      }
-
-      function onTransportTypeChange(id) {
-        const t = document.getElementById('ns-transport-type-' + id).value
-        document.getElementById('ns-transport-remote-wrap-' + id).style.display =
-          t === 'rsync' ? '' : 'none'
-        document.getElementById('ns-transport-master-wrap-' + id).style.display =
-          t === 'axfr' ? '' : 'none'
-      }
-
-      function onEngineChange(id) {
-        const engine = document.getElementById('ns-engine-' + id).value
-        const isNative = engine === 'native'
-        document.getElementById('ns-native-' + id).style.display = isNative ? '' : 'none'
-        document.getElementById('ns-export-' + id).style.display = isNative ? 'none' : ''
-
-        // Sensible default transport for the chosen engine
-        const transEl = document.getElementById('ns-transport-type-' + id)
-        if (isNative && !['noop'].includes(transEl.value)) transEl.value = 'noop'
-        if (!isNative && transEl.value === 'noop') transEl.value = 'rsync'
-        onTransportTypeChange(id)
-      }
-
-      function addListenRow(id, seed) {
-        seed = seed || {}
-        const tbody = document.getElementById('ns-listen-body-' + id)
-        const tr = document.createElement('tr')
-        tr.className = 'listen-row'
-
-        const addrTd = document.createElement('td')
-        const addr = document.createElement('input')
-        addr.type = 'text'
-        addr.className = 'listen-address'
-        addr.value = seed.address ?? '127.0.0.1'
-        addr.addEventListener('input', () => {
-          validateNsRow(id)
-          validateAll()
-        })
-        addrTd.appendChild(addr)
-        tr.appendChild(addrTd)
-
-        const portTd = document.createElement('td')
-        const port = document.createElement('input')
-        port.type = 'number'
-        port.className = 'listen-port'
-        port.min = 1
-        port.max = 65535
-        port.value = seed.port ?? 53
-        port.addEventListener('input', () => {
-          validateNsRow(id)
-          validateAll()
-        })
-        portTd.appendChild(port)
-        tr.appendChild(portTd)
-
-        const protoTd = document.createElement('td')
-        const proto = document.createElement('select')
-        proto.className = 'listen-proto'
-        for (const v of ['udp', 'tcp']) {
-          const o = document.createElement('option')
-          o.value = v
-          o.textContent = v
-          if ((seed.proto || 'udp') === v) o.selected = true
-          proto.appendChild(o)
-        }
-        protoTd.appendChild(proto)
-        tr.appendChild(protoTd)
-
-        const rmTd = document.createElement('td')
-        const rm = document.createElement('button')
-        rm.type = 'button'
-        rm.className = 'btn-remove'
-        rm.innerHTML = '&times;'
-        rm.addEventListener('click', () => {
-          tr.remove()
-          validateNsRow(id)
-          validateAll()
-        })
-        rmTd.appendChild(rm)
-        tr.appendChild(rmTd)
-
-        tbody.appendChild(tr)
+        document.getElementById('store-type').disabled = _apiRunning || isUpgrade()
+        document.getElementById('n-store-lock').textContent = _apiRunning
+          ? 'The running API loaded this store at startup — stop it to make changes.'
+          : ''
       }
 
       // -------------------------------------------------------------------------
@@ -1382,70 +886,11 @@
         const apiPort = Number(document.getElementById('api-port').value)
         if (apiHost) api.host = apiHost
         if (apiPort) api.port = apiPort
-        const config = {
+        return {
           install: document.getElementById('install-type').value,
           store,
           api,
-          nameserver: [],
         }
-
-        for (const row of document.querySelectorAll('#ns-body tr.ns-row')) {
-          const id = Number(row.dataset.id)
-          config.nameserver.push(collectNsRow(id))
-        }
-
-        return config
-      }
-
-      function collectNsRow(id) {
-        const engine = document.getElementById('ns-engine-' + id).value
-        const ns = {
-          name: document.getElementById('ns-name-' + id).value.trim(),
-          engine,
-        }
-
-        if (engine === 'native') {
-          ns.listen = []
-          for (const r of document.querySelectorAll(
-            `#ns-listen-body-${id} tr.listen-row`,
-          )) {
-            const address = r.querySelector('.listen-address').value.trim()
-            const port = Number(r.querySelector('.listen-port').value)
-            const proto = r.querySelector('.listen-proto').value
-            if (address && port) ns.listen.push({ address, port, proto })
-          }
-          ns.publisher = { type: 'memory' }
-        } else {
-          const path = document.getElementById('ns-publisher-path-' + id).value.trim()
-          ns.publisher = { type: PUBLISHER_BY_ENGINE[engine] || 'rfc1035' }
-          if (path) ns.publisher.path = path
-        }
-
-        const transport = {
-          type: document.getElementById('ns-transport-type-' + id).value,
-          interval:
-            Number(document.getElementById('ns-transport-interval-' + id).value) || 0,
-          cooldown:
-            Number(document.getElementById('ns-transport-cooldown-' + id).value) || 0,
-        }
-        const remote = document.getElementById('ns-transport-remote-' + id).value.trim()
-        const master = document.getElementById('ns-transport-master-' + id).value.trim()
-        if (transport.type === 'rsync' && remote) transport.remote = remote
-        if (transport.type === 'axfr' && master) transport.master = master
-        ns.transport = transport
-
-        const dEnabled =
-          document.getElementById('ns-dnssec-enabled-' + id).value === 'true'
-        const dAlgo = document.getElementById('ns-dnssec-algo-' + id).value
-        const dKeyset = document.getElementById('ns-dnssec-keyset-' + id).value.trim()
-        const dNsec3 = document.getElementById('ns-dnssec-nsec3-' + id).value === 'true'
-        if (dEnabled || dAlgo || dKeyset || dNsec3) {
-          ns.dnssec = { enabled: dEnabled, nsec3: dNsec3 }
-          if (dAlgo) ns.dnssec.algorithm = dAlgo
-          if (dKeyset) ns.dnssec.keyset = dKeyset
-        }
-
-        return ns
       }
 
       // -------------------------------------------------------------------------
@@ -1487,12 +932,6 @@
           // Pre-fill the suggested port on first configuration (useful if user switches to remote mode)
           document.getElementById('api-port').value = c._suggested.api
         }
-
-        // Clear any existing NS rows before re-populating
-        document.getElementById('ns-body').innerHTML = ''
-        const nameservers =
-          Array.isArray(c.nameserver) && c.nameserver.length ? c.nameserver : null
-        if (nameservers) for (const ns of nameservers) addNsRow(migrateLegacyNs(ns))
       }
 
       // -------------------------------------------------------------------------
@@ -1515,7 +954,7 @@
           // A brand-new MySQL install needs its schema before the API can start.
           // The server refuses this outright if the database is already populated.
           if (config.install === 'new' && config.store.type === 'mysql') {
-            setBoot('creating schema…', null)
+            msg.textContent = 'Creating schema…'
             const initRes = await fetch('/nt/init-schema', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -1523,13 +962,12 @@
             })
             const initData = await initRes.json()
             if (!initRes.ok) {
-              setBoot('schema not created', false, initData.error)
               msg.textContent = '✗ ' + (initData.error || 'Schema creation failed')
               msg.className = 'err'
               validateAll()
               return
             }
-            setBoot(`created ${initData.applied?.length ?? 0} tables`, null)
+            msg.textContent = `Created ${initData.applied?.length ?? 0} tables…`
           }
 
           const res = await fetch('/nt/config', {
@@ -1560,18 +998,95 @@
         }
       })
 
-      function setBoot(text, ok, detail) {
-        document.getElementById('boot-status').textContent = text
-        document.getElementById('boot-detail').textContent = detail ?? ''
-        setBadge('b-boot', ok === true, ok === null)
+      // -------------------------------------------------------------------------
+      // API run state — dim when stopped, green when running, red when it failed
+      // -------------------------------------------------------------------------
+
+      let _apiRunning = false
+      let _apiError = null
+      let _apiBusy = false
+      let _apiDetail = ''
+
+      /**
+       * What the running API actually came up on. Both values come back from the
+       * server, not from this form, so they show what etc/api.json produced
+       * rather than whatever is currently typed in.
+       */
+      function describeApi(api) {
+        return [
+          api?.pid ? `pid: ${api.pid}` : null,
+          api?.store ? `store: ${api.store}` : null,
+        ]
+          .filter(Boolean)
+          .join(', ')
       }
 
-      async function refreshBootStatus() {
+      function setApiState(text, state) {
+        const el = document.getElementById('api-status')
+        el.textContent = text
+        el.className = 'status' + (state ? ' ' + state : '')
+      }
+
+      function setApiRunning(running, error, detail) {
+        _apiRunning = running
+        _apiError = error || null
+        _apiDetail = running ? (detail ?? '') : ''
+        if (running) setApiState('running', 'ok')
+        else if (_apiError) setApiState('failed', 'err')
+        else setApiState('not started', null)
+        validateAll()
+      }
+
+      function syncApiToggle(canStart) {
+        const btn = document.getElementById('btn-api-toggle')
+        const note = document.getElementById('n-api-toggle')
+
+        btn.textContent = _apiRunning ? 'Stop API' : 'Start API'
+        btn.disabled = _apiBusy || (!_apiRunning && !canStart)
+
+        note.textContent =
+          _apiRunning || canStart ? '' : 'Finish the settings below first'
+
+        const detail = document.getElementById('n-api-detail')
+        detail.textContent = _apiError || (_apiRunning ? _apiDetail : '')
+        detail.className = 'field-note' + (_apiError ? ' err' : '')
+      }
+
+      async function toggleApi() {
+        const starting = !_apiRunning
+        _apiBusy = true
+        _apiError = null
+        setApiState(starting ? 'starting…' : 'stopping…', null)
+        syncApiToggle(false)
+
+        const config = collectConfig()
+        const body = starting
+          ? { action: 'start', api: config.api, store: config.store }
+          : { action: 'stop' }
+
         try {
-          const data = await (await fetch('/nt/service')).json()
-          const running = Boolean(data?.api?.running)
-          setBoot(running ? 'API running' : 'API not started', running ? true : null)
-          return running
+          const res = await fetch('/nt/service', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+          const data = await res.json()
+          _apiBusy = false
+          if (!res.ok) return setApiRunning(false, data.error)
+          // The start response says only that it came up; ask what it came up on.
+          if (data.running) return void (await refreshApiStatus())
+          setApiRunning(false, null)
+        } catch (err) {
+          _apiBusy = false
+          setApiRunning(false, err.message)
+        }
+      }
+
+      async function refreshApiStatus() {
+        try {
+          const { api } = await (await fetch('/nt/service')).json()
+          setApiRunning(Boolean(api?.running), api?.error, describeApi(api))
+          return _apiRunning
         } catch {
           return false
         }
@@ -1581,7 +1096,7 @@
       // than assuming it is up the moment the save returns.
       async function waitForApi() {
         for (let i = 0; i < 20; i++) {
-          if (await refreshBootStatus()) return true
+          if (await refreshApiStatus()) return true
           await new Promise((r) => setTimeout(r, 250))
         }
         return false
@@ -1606,11 +1121,21 @@
       // Switching install type invalidates any previous schema probe.
       document.getElementById('install-type').addEventListener('change', () => {
         _schemaFound = null
+        _schemaProbedDsn = null
         document.getElementById('n-detect').textContent = ''
         validateAll()
+        // Switching to upgrade with the connection already filled in: nothing
+        // more will change, so nothing else would trigger the probe.
+        probeSchemaWhenConnected(dsnFromFields())
       })
 
       document.getElementById('detect-schema').addEventListener('click', detectSchema)
+
+      document.getElementById('dsn-status').addEventListener('dsn-check', (e) => {
+        if (e.detail?.ok) probeSchemaWhenConnected(e.detail.dsn)
+      })
+
+      document.getElementById('btn-api-toggle').addEventListener('click', toggleApi)
 
       document.getElementById('download-api-config').addEventListener('click', () => {
         window.location = '/nt/api-config'
@@ -1640,8 +1165,6 @@
       // DSN → populate individual fields
       document.getElementById('db-dsn').addEventListener('input', onDsnChange)
 
-      document.getElementById('btn-add-ns').addEventListener('click', () => addNsRow())
-
       // -------------------------------------------------------------------------
       // Boot: fetch config from server then populate
       // -------------------------------------------------------------------------
@@ -1652,16 +1175,11 @@
           if (data?._hostname) _serverHostname = data._hostname
 
           populateForm(data)
-          refreshBootStatus()
-
-          // If no nameservers were populated (fresh install), add an empty starter row
-          if (document.getElementById('ns-body').children.length === 0) addNsRow()
-
+          refreshApiStatus()
           validateAll()
         })
         .catch((err) => {
           console.error('Config fetch failed:', err)
-          addNsRow()
           validateAll()
         })
     </script>

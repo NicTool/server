@@ -22,10 +22,11 @@ NicTool is an open-source DNS management system. This package provides the **ser
 
 ## Nameserver supervisor (lib/nameservers.js)
 
-- Reads nameserver records from the data store, starts/stops each DNS engine.
-  Each record carries its own runtime config (engine, listen, publisher,
-  transport, dnssec) alongside the legacy 2.x fields.
-- Supports a native in-memory authoritative server plus export engines (bind, knot, nsd, powerdns, tinydns, maradns), wiring up the right Source (json / toml / mysql), Publisher (memory / rfc1035 / tinydns-cdb / powerdns-db), Transport (noop / rsync / axfr / db-replication), and DNSSEC Signer per engine.
+- Reads nameserver records from the data store, starts/stops each one.
+  Each record carries its own runtime config (type, listen, publisher,
+  transport, dnssec) alongside the legacy 2.x fields. `type` is the
+  nt_nameserver_export_type name — which software this is, stored once.
+- Supports a native in-memory authoritative server plus the exporting types (bind, knot, nsd, powerdns, coredns, djbdns, maradns), wiring up the right Source (json / toml / mysql), Publisher (memory / rfc1035 / tinydns-cdb / powerdns-db / coredns-redis), Transport (noop / rsync / axfr / db-replication / pull), and DNSSEC Signer per type.
 
 Publisher options, set under `[nameserver.publisher]`:
 
@@ -37,10 +38,8 @@ Publisher options, set under `[nameserver.publisher]`:
 | `maradns`     | `path` — directory for `<zone>.csv2` files. MaraDNS reads csv2, not RFC 1035, so this is its own format. `config: {}` also writes a `mararc` declaring the zones, with `chroot_dir` pointing at `path`; `config.bindAddress` and `config.globals` set the rest. **`terminator: ''` for MaraDNS 1.2**, whose csv2 has no record terminator and rejects the `~` that 2.x uses |
 | `powerdns-db` | `dsn` (or `host`/`port`/`user`/`password`/`database`) for a PowerDNS **gmysql** backend; `domainType` (default `NATIVE`). This is the push model — the alternative is `nt-powerdns`, the pipe backend below, which leaves the data in NicTool. Use one or the other.                                                                                                        |
 
-Publishers default by engine: `native` → memory, `tinydns` → tinydns-cdb,
+Publishers default by nameserver type: `native` → memory, `djbdns` → tinydns-cdb,
 `maradns` → maradns, everything else → rfc1035.
-
-Not yet implemented, and they throw if selected: the DNSSEC signers, `axfr` transport.
 
 ## Data model / config
 
@@ -209,8 +208,8 @@ Supports A, AAAA, CNAME, MX, NS, TXT, PTR, SRV, CAA, SOA over UDP and TCP.
 
 ```toml
 [[nameserver]]
-name   = "ns1.example.com."
-engine = "native"
+name = "ns1.example.com."
+type = "native"
 
 # Bind UDP and TCP on all interfaces, port 53.
 [[nameserver.listen]]
@@ -238,17 +237,34 @@ cooldown = 5       # minimum seconds between consecutive publishes (burst protec
 Multiple native nameservers can run side-by-side by adding more `[[nameserver]]`
 blocks — each gets its own UDP/TCP listener set.
 
-### DNSSEC (native engine — future)
+### DNSSEC (native engine)
 
-Attach an optional signing stage between the publisher and transport:
+Attach a signing stage between the publisher and transport. The native engine
+has no external signing tool, so `MemorySigner` signs the in-process zone map
+directly and `NativeNS` answers with RRSIG, DNSKEY and NSEC when the query
+carries the DO bit.
 
 ```toml
 [nameserver.dnssec]
-enabled   = false          # set true once MemorySigner is implemented
+enabled   = true
 algorithm = "ECDSAP256SHA256"
 keyset    = "/var/lib/nictool/dnssec/ns1"
-nsec3     = true
+nsec3     = false           # NSEC only; the in-process signer has no NSEC3
 ```
+
+`keyset` is a directory of BIND-format key files — the same
+`K<zone>.+<alg>+<tag>.{key,private}` pair `dnssec-keygen` writes, so a zone can
+move between this signer and the file signer without re-keying:
+
+```sh
+dnssec-keygen -a ECDSAP256SHA256 -K /var/lib/nictool/dnssec/ns1 -n ZONE example.com
+dnssec-keygen -a ECDSAP256SHA256 -K /var/lib/nictool/dnssec/ns1 -f KSK -n ZONE example.com
+```
+
+NicTool signs with those keys but never generates or rolls them: rollover is an
+operational decision, not something a publish cycle should make. Elliptic-curve
+algorithms only (`ECDSAP256SHA256`, `ECDSAP384SHA384`, `ED25519`, `ED448`) —
+RSA keys are reported as unusable rather than silently skipped.
 
 ---
 
