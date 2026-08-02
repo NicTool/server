@@ -18,9 +18,13 @@ jobs:
     secrets: inherit
     permissions:
       contents: read
+    with:
+      dnssec-tools: true
 
   test:
     uses: NicTool/.github/.github/workflows/test.yml@main
     secrets: inherit
     permissions:
       contents: read
+    with:
+      dnssec-tools: true

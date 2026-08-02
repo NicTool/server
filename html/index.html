@@ -52,7 +52,7 @@
         </button>
       </div>
       <div class="collapse navbar-collapse" id="navbarSupportedContent">
-        <ul class="navbar-nav" role="tablist">
+        <ul class="navbar-nav d-none" id="mainTabs" role="tablist">
           <li class="nav-item" role="presentation">
             <button
               class="nav-link active"
@@ -97,7 +97,7 @@
           </li>
         </ul>
 
-        <ul class="navbar-nav gap-3">
+        <ul class="navbar-nav gap-3 d-none" id="profileMenu">
           <li class="navbar-item dropdown">
             <a
               class="nav-link dropdown-toggle"
@@ -786,63 +786,282 @@
             ></button>
           </div>
           <div class="modal-body">
-            <div class="form-floating mb-3">
-              <input
-                type="text"
-                class="form-control"
-                id="nsEditName"
-                placeholder="ns1.example.com"
-              />
-              <label for="nsEditName">Name</label>
+            <div id="nsEditErrors" class="alert alert-danger d-none" role="alert"></div>
+            <div
+              id="nsEditWarnings"
+              class="alert alert-warning d-none"
+              role="alert"
+            ></div>
+
+            <div class="row g-3 mb-3">
+              <div class="col-sm-7">
+                <label class="form-label" for="nsEditName">Name</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="nsEditName"
+                  placeholder="ns1.example.com."
+                />
+                <div class="form-text">Fully qualified, ending in a dot.</div>
+              </div>
+              <div class="col-sm-5">
+                <label class="form-label" for="nsEditTtl">TTL</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  id="nsEditTtl"
+                  min="0"
+                  placeholder="86400"
+                />
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label" for="nsEditAddress">IPv4 address</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="nsEditAddress"
+                  placeholder="192.0.2.1"
+                />
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label" for="nsEditAddress6">IPv6 address</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="nsEditAddress6"
+                  placeholder="2001:db8::1"
+                />
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="nsEditDescription">Description</label>
+                <input type="text" class="form-control" id="nsEditDescription" />
+              </div>
             </div>
-            <div class="form-floating mb-3">
-              <input
-                type="number"
-                class="form-control"
-                id="nsEditTtl"
-                placeholder="86400"
-                min="0"
-              />
-              <label for="nsEditTtl">TTL (seconds)</label>
+
+            <hr />
+
+            <div class="row g-3 mb-3">
+              <div class="col-sm-6">
+                <label class="form-label" for="nsEditType">Type</label>
+                <select class="form-select" id="nsEditType"></select>
+                <div class="form-text" id="nsEditTypeHelp"></div>
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label" for="nsEditPublisher">Zone data</label>
+                <select class="form-select" id="nsEditPublisher"></select>
+                <div class="form-text" id="nsEditPublisherHelp"></div>
+              </div>
             </div>
-            <div class="form-floating mb-3">
-              <input
-                type="text"
-                class="form-control"
-                id="nsEditAddress"
-                placeholder="192.0.2.1"
-              />
-              <label for="nsEditAddress">IPv4 Address</label>
+
+            <!-- publisher fields, shown per type -->
+            <div class="row g-3 mb-3" id="nsEditPublisherFields">
+              <div class="col-12" data-field="path">
+                <label class="form-label" for="nsPubPath">Output directory</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="nsPubPath"
+                  placeholder="/etc/bind/zones"
+                />
+              </div>
+              <div class="col-12" data-field="writeConfig">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="nsPubWriteConfig" />
+                  <label class="form-check-label" for="nsPubWriteConfig">
+                    Also write <span id="nsPubConfigName">the server config</span>
+                  </label>
+                </div>
+              </div>
+              <div class="col-12" data-field="compile">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="nsPubCompile" />
+                  <label class="form-check-label" for="nsPubCompile">
+                    Compile data.cdb here with tinydns-data
+                  </label>
+                  <div class="form-text">
+                    Turn off when the binary lives on the target host.
+                  </div>
+                </div>
+              </div>
+              <div class="col-sm-8" data-field="dsn">
+                <label class="form-label" for="nsPubDsn">PowerDNS database DSN</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="nsPubDsn"
+                  placeholder="mysql://user:pass@host/powerdns"
+                />
+              </div>
+              <div class="col-sm-4" data-field="domainType">
+                <label class="form-label" for="nsPubDomainType">Domain type</label>
+                <select class="form-select" id="nsPubDomainType">
+                  <option value="NATIVE">NATIVE</option>
+                  <option value="MASTER">MASTER</option>
+                </select>
+              </div>
+              <div class="col-sm-5" data-field="address">
+                <label class="form-label" for="nsPubAddress">Redis address</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="nsPubAddress"
+                  placeholder="127.0.0.1:6379"
+                />
+              </div>
+              <div class="col-sm-4" data-field="password">
+                <label class="form-label" for="nsPubPassword">Redis password</label>
+                <input
+                  type="password"
+                  class="form-control"
+                  id="nsPubPassword"
+                  autocomplete="new-password"
+                />
+              </div>
+              <div class="col-sm-3" data-field="keyPrefix">
+                <label class="form-label" for="nsPubKeyPrefix">Key prefix</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="nsPubKeyPrefix"
+                  placeholder="_dns:"
+                />
+              </div>
             </div>
-            <div class="form-floating mb-3">
-              <input
-                type="text"
-                class="form-control"
-                id="nsEditAddress6"
-                placeholder="2001:db8::1"
-              />
-              <label for="nsEditAddress6">IPv6 Address</label>
+
+            <!-- listen sockets, native only -->
+            <div class="mb-3 d-none" id="nsEditListenSection">
+              <label class="form-label">Listen</label>
+              <table class="table table-sm align-middle mb-1" id="nsEditListenTable">
+                <thead>
+                  <tr>
+                    <th scope="col">Address</th>
+                    <th scope="col" style="width: 7rem">Port</th>
+                    <th scope="col" style="width: 7rem">Protocol</th>
+                    <th scope="col" style="width: 3rem"></th>
+                  </tr>
+                </thead>
+                <tbody id="nsEditListenBody"></tbody>
+              </table>
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-secondary"
+                id="nsEditAddListen"
+              >
+                Add listener
+              </button>
             </div>
-            <div class="form-floating mb-3">
-              <select class="form-select" id="nsEditExportType">
-                <option value="bind">bind</option>
-                <option value="nsd">nsd</option>
-                <option value="knot">knot</option>
-                <option value="djbdns">djbdns</option>
-                <option value="maradns">maradns</option>
-                <option value="powerdns">powerdns</option>
-              </select>
-              <label for="nsEditExportType">Export Format</label>
+
+            <hr />
+
+            <div class="row g-3 mb-3">
+              <div class="col-sm-6">
+                <label class="form-label" for="nsEditTransport">Delivery</label>
+                <select class="form-select" id="nsEditTransport"></select>
+                <div class="form-text" id="nsEditTransportHelp"></div>
+              </div>
             </div>
-            <div class="form-floating mb-3">
-              <input
-                type="text"
-                class="form-control"
-                id="nsEditDescription"
-                placeholder="Description"
-              />
-              <label for="nsEditDescription">Description</label>
+
+            <div class="row g-3 mb-3" id="nsEditTransportFields">
+              <div class="col-sm-8" data-field="remote">
+                <label class="form-label" for="nsTrRemote">rsync remote</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="nsTrRemote"
+                  placeholder="bind@ns1.example.com:/etc/bind/zones"
+                />
+              </div>
+              <div class="col-sm-4" data-field="sshKey">
+                <label class="form-label" for="nsTrSshKey">SSH key</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="nsTrSshKey"
+                  placeholder="/etc/nictool/id_ed25519"
+                />
+              </div>
+              <div class="col-12" data-field="notify">
+                <label class="form-label" for="nsTrNotify"
+                  >Notify these secondaries</label
+                >
+                <input
+                  type="text"
+                  class="form-control"
+                  id="nsTrNotify"
+                  placeholder="192.0.2.53, 192.0.2.54:5353"
+                />
+                <div class="form-text">
+                  Also written into the generated config as the transfer ACL.
+                </div>
+              </div>
+              <div class="col-12" data-field="tsigKey">
+                <label class="form-label" for="nsTrTsigKey">TSIG key</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="nsTrTsigKey"
+                  placeholder="hmac-sha256:keyname:base64secret"
+                />
+                <div class="form-text">
+                  Optional. Leave empty to authorize the notify source by address.
+                </div>
+              </div>
+              <div class="col-12" data-field="pullSource">
+                <label class="form-label" for="nsTrPullSource">How it fetches</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="nsTrPullSource"
+                  placeholder="fetchzone from cron"
+                />
+                <div class="form-text">
+                  A note for whoever reads this later. NicTool sends nothing.
+                </div>
+              </div>
+              <div class="col-sm-6" data-field="interval">
+                <label class="form-label" for="nsTrInterval">Interval (seconds)</label>
+                <input type="number" class="form-control" id="nsTrInterval" min="0" />
+                <div class="form-text">0 publishes only when the store changes.</div>
+              </div>
+              <div class="col-sm-6" data-field="cooldown">
+                <label class="form-label" for="nsTrCooldown">Cooldown (seconds)</label>
+                <input type="number" class="form-control" id="nsTrCooldown" min="0" />
+              </div>
             </div>
+
+            <hr />
+
+            <div class="mb-3">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="nsEditDnssec" />
+                <label class="form-check-label" for="nsEditDnssec"
+                  >Sign with DNSSEC</label
+                >
+                <div class="form-text" id="nsEditDnssecHelp"></div>
+              </div>
+              <div class="row g-3 mt-1" id="nsEditDnssecFields">
+                <div class="col-sm-5">
+                  <label class="form-label" for="nsDsAlgorithm">Algorithm</label>
+                  <select class="form-select" id="nsDsAlgorithm"></select>
+                </div>
+                <div class="col-sm-5" data-dnssec="keyset">
+                  <label class="form-label" for="nsDsKeyset">Key directory</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="nsDsKeyset"
+                    placeholder="/var/lib/nictool/dnssec"
+                  />
+                </div>
+                <div class="col-sm-2 d-flex align-items-end">
+                  <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="nsDsNsec3" />
+                    <label class="form-check-label" for="nsDsNsec3">NSEC3</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="d-flex justify-content-end gap-2 mt-4">
               <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                 Cancel

@@ -13,6 +13,7 @@ import {
   buildRemoteApiConfig,
   normalizeApiMode,
   readApiConfig,
+  storeTypeToEnv,
   toJson,
   writeApiConfig,
   writeBootstrap,
@@ -49,6 +50,8 @@ const MIME = {
  * @param {object} [opts.suggestedPorts] Random port suggestions { api, client }.
  * @param {Function} [opts.onSaved]  Called with (config, ctx) after a successful save, once the
  *                                   response has flushed. May set ctx.apiServer.
+ * @param {Function} [opts.startApi] Called with (config); resolves { apiServer, apiRemoteUrl, error }.
+ * @param {Function} [opts.stopApi]  Called with (ctx) to shut down a locally started API.
  * @returns {Promise<https.Server>}
  */
 export async function startServer({
@@ -59,8 +62,11 @@ export async function startServer({
   nicConfig = null,
   apiServer = null,
   apiRemoteUrl = null,
+  apiPid = null,
   suggestedPorts = null,
   onSaved = null,
+  startApi = null,
+  stopApi = null,
   supervisor = null,
 }) {
   // ctx is mutated as services start/stop
@@ -70,10 +76,18 @@ export async function startServer({
     nicConfig,
     apiServer,
     apiRemoteUrl,
+    apiPid,
     suggestedPorts,
     host,
     onSaved,
+    startApi,
+    stopApi,
     supervisor,
+  }
+
+  // An API started before us came up on the api.json already on disk.
+  if (apiServer || apiRemoteUrl) {
+    ctx.storeConfig = (await readApiConfig(configDir).catch(() => null))?.store ?? null
   }
 
   const server = https.createServer({ cert: tls.cert, key: tls.key }, (req, res) =>
@@ -104,7 +118,7 @@ async function handleRequest(req, res, ctx) {
       return await serveFile(res, page)
     }
 
-    if (url === '/nt/config' && method === 'GET') return serveConfig(res, ctx)
+    if (url === '/nt/config' && method === 'GET') return await serveConfig(res, ctx)
     if (url === '/nt/config' && method === 'POST') return await saveConfig(req, res, ctx)
     if (url?.startsWith('/nt/check-path') && method === 'GET')
       return await checkPath(req, res, ctx)
@@ -116,6 +130,8 @@ async function handleRequest(req, res, ctx) {
     if (url === '/nt/api-config' && method === 'GET')
       return await serveApiConfig(res, ctx)
     if (url === '/nt/service' && method === 'GET') return serveService(res, ctx)
+    if (url === '/nt/service' && method === 'POST')
+      return await controlService(req, res, ctx)
     if (url === '/nt/status' && method === 'GET') return await serveStatus(res, ctx)
     if (url === '/nt/nameservers/status' && method === 'GET')
       return serveNameserversStatus(res, ctx)
@@ -193,27 +209,124 @@ async function serveStatic(req, res, rootDir, urlPrefix) {
   }
 }
 
-function serveConfig(res, { nicConfig, suggestedPorts, host }) {
-  if (nicConfig) {
-    respond(
-      res,
-      200,
-      'application/json',
-      JSON.stringify({ ...nicConfig, _hostname: host }, null, 2),
-    )
-  } else {
-    respond(
-      res,
-      200,
-      'application/json',
-      JSON.stringify({ _suggested: suggestedPorts ?? {}, _hostname: host }, null, 2),
-    )
-  }
+/**
+ * The configurator's view of what is already on disk. The store lives in
+ * api.json rather than the bootstrap file, so it is read back from there —
+ * without it the form comes up blank on every visit and the operator retypes
+ * a connection the server already has.
+ */
+async function serveConfig(res, { configDir, nicConfig, suggestedPorts, host }) {
+  const store = (await readApiConfig(configDir).catch(() => null))?.store ?? null
+
+  const config = nicConfig ? { ...nicConfig } : { _suggested: suggestedPorts ?? {} }
+  if (store?.type && !config.store) config.store = store
+  config._hostname = host
+
+  respond(res, 200, 'application/json', JSON.stringify(config, null, 2))
 }
 
-function serveService(res, { apiServer }) {
-  const api = { running: apiServer != null }
+/**
+ * The store a running API loaded, as a URI with the password redacted. Built
+ * from the individual fields rather than store.dsn, which carries the password
+ * in clear — this is reported to a page served before anyone authenticates.
+ */
+function storeUri(store) {
+  if (!store?.type) return null
+
+  if (storeTypeToEnv(store.type) === 'mysql') {
+    const credentials = store.user
+      ? `${encodeURIComponent(store.user)}${store.password ? ':***' : ''}@`
+      : ''
+    const port = store.port ? `:${store.port}` : ''
+    return `mysql://${credentials}${store.host ?? '127.0.0.1'}${port}/${store.database ?? ''}`
+  }
+
+  return store.path ? `file://${store.path}` : null
+}
+
+// A tcp-mode API is reached by URL rather than by injection, so apiServer alone
+// does not tell us whether one is up.
+function serveService(res, ctx) {
+  const api = { running: Boolean(ctx.apiServer || ctx.apiRemoteUrl) }
+  if (ctx.apiError) api.error = ctx.apiError
+
+  // What the API actually came up on, so the configurator can show that its
+  // etc/api.json is the one in use rather than leaving the operator guessing.
+  if (api.running) {
+    api.mode = ctx.apiMode ?? normalizeApiMode(ctx.nicConfig?.api?.mode)
+    if (ctx.apiPid) api.pid = ctx.apiPid
+    const store = storeUri(ctx.storeConfig)
+    if (store) api.store = store
+  }
+
   respond(res, 200, 'application/json', JSON.stringify({ api }, null, 2))
+}
+
+/**
+ * Start or stop the local API from the configurator, before anything is saved.
+ * Starting writes etc/api.json first — the API reads its store from there at
+ * module load, so it has to be on disk before the process or import happens.
+ */
+async function controlService(req, res, ctx) {
+  let body
+  try {
+    body = JSON.parse(await readBody(req))
+  } catch {
+    return respond(
+      res,
+      400,
+      'application/json',
+      JSON.stringify({ error: 'Invalid JSON' }),
+    )
+  }
+
+  const fail = (status, error) =>
+    respond(res, status, 'application/json', JSON.stringify({ error }))
+
+  if (body?.action === 'stop') {
+    try {
+      await ctx.stopApi?.(ctx)
+    } catch (err) {
+      return fail(500, err.message)
+    }
+    ctx.apiServer = null
+    ctx.apiRemoteUrl = null
+    ctx.apiError = null
+    ctx.apiMode = null
+    ctx.apiPid = null
+    return respond(res, 200, 'application/json', JSON.stringify({ running: false }))
+  }
+
+  if (body?.action !== 'start') return fail(400, 'action must be "start" or "stop"')
+  if (!ctx.startApi) return fail(501, 'This server cannot start an API')
+  if (ctx.apiServer || ctx.apiRemoteUrl)
+    return respond(res, 200, 'application/json', JSON.stringify({ running: true }))
+
+  const mode = normalizeApiMode(body?.api?.mode)
+  if (mode === 'remote') return fail(400, 'A remote API is not ours to start')
+
+  const invalid = validateConfig({ api: { ...body.api, mode }, store: body.store })
+  if (invalid) return fail(400, invalid)
+
+  try {
+    await writeApiConfig(ctx.configDir, body.store)
+    const started = await ctx.startApi({ api: { ...body.api, mode } })
+    ctx.apiServer = started?.apiServer ?? null
+    ctx.apiRemoteUrl = started?.apiRemoteUrl ?? null
+    ctx.storeConfig = body.store
+
+    if (!ctx.apiServer && !ctx.apiRemoteUrl) {
+      ctx.apiError = started?.error || 'The API did not start — see the server log'
+      return fail(500, ctx.apiError)
+    }
+    ctx.apiError = null
+    ctx.apiMode = mode
+    ctx.apiPid = started?.pid ?? null
+    respond(res, 200, 'application/json', JSON.stringify({ running: true }))
+  } catch (err) {
+    ctx.apiError = err.message
+    fail(500, err.message)
+  }
 }
 
 async function checkPath(req, res, { configDir }) {
@@ -385,11 +498,6 @@ async function saveConfig(req, res, ctx) {
     configured: true,
     api: { ...submitted.api, mode },
   }
-  // Nameservers belong in the store, which does not exist until the API starts.
-  // onSaved persists them once it is up.
-  ctx.pendingNameservers = Array.isArray(submitted.nameserver)
-    ? submitted.nameserver
-    : null
 
   try {
     // The store connection belongs to the API, not to the server. In remote
@@ -435,7 +543,6 @@ function validateConfig(config) {
     })
       .unknown(true)
       .required(),
-    nameserver: Joi.array().items(Joi.object().unknown(true)).optional(),
   }).unknown(true)
 
   const { error } = schema.validate(config, { abortEarly: true })

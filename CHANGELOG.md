@@ -4,6 +4,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Unreleased
 
+### [0.6.0] - 2026-07-30
+
 ### [0.5.0] - 2026-07-27
 
 - doc(README): updated installed instructions
@@ -33,3 +35,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 [0.2.0]: https://github.com/NicTool/server/releases/tag/v0.2.0
 [0.0.2]: https://github.com/NicTool/server/releases/tag/v0.0.2
 [0.2.2]: https://github.com/NicTool/server/releases/tag/v0.2.2
+[0.5.0]: https://github.com/NicTool/server/releases/tag/v0.5.0
+[0.6.0]: https://github.com/NicTool/server/releases/tag/v0.6.0

@@ -9,6 +9,17 @@ import {
   parseInputValue,
   parseOptionalTtlValue,
 } from './lib/format.js'
+import {
+  DNSSEC_ALGORITHMS,
+  NS_TYPES,
+  fieldsFor,
+  fromRecord,
+  publishersFor,
+  reconcile,
+  toPayload,
+  transportsFor,
+  validate,
+} from './lib/ns-form.js'
 import { parseHumanTime, secondsToHuman } from './lib/time.js'
 import { normalizeOwnerForZone } from './lib/zone-name.js'
 import './components/zone-records.js'
@@ -234,10 +245,19 @@ function initGroupNav() {
   })
 }
 
+// The navbar lives outside #loggedInMain, so it has to be toggled explicitly —
+// otherwise the tabs and the Profile/Logout menu sit above the login form.
+function setNavVisible(visible) {
+  for (const id of ['mainTabs', 'profileMenu']) {
+    document.getElementById(id)?.classList.toggle('d-none', !visible)
+  }
+}
+
 function onLoggedIn(response) {
   document.getElementById('login_div').style.display = 'none'
   document.getElementById('loggedInMain').style.display = 'block'
   document.getElementById('loggedInMain').classList.add('show')
+  setNavVisible(true)
 
   currentUser = response.user ?? null
   currentGroupId = response.group?.id ?? null
@@ -254,6 +274,8 @@ function onLoggedIn(response) {
     .then((r) => r.json())
     .then((cfg) => {
       if (cfg?.zone) zoneDefaults = { ...zoneDefaults, ...cfg.zone }
+      // Which store decides whether interval 0 is a working configuration.
+      storeType = cfg?.store?.type ?? null
     })
     .catch(() => {})
 
@@ -265,6 +287,7 @@ function onLoggedIn(response) {
 function onLoggedOut() {
   document.getElementById('loggedInMain').style.display = 'none'
   document.getElementById('login_div').style.display = 'block'
+  setNavVisible(false)
 }
 
 const ZONE_SUBGROUPS_COOKIE = 'nt-zone-include-subgroups'
@@ -334,71 +357,348 @@ function initNsTable() {
 }
 
 let activeNsContext = null
+let nsForm = null
+
+const nsEl = (id) => document.getElementById(id)
+
+/** Which store the API is on, so the form can warn about event mode. */
+let storeType = null
 
 function openNsPane(ns) {
   activeNsContext = ns ? { mode: 'edit', ns } : { mode: 'create' }
-  const isCreate = !ns
-  document.getElementById('nsEditPaneLabel').textContent = isCreate
-    ? 'Create Nameserver'
-    : 'Edit Nameserver'
-  document.getElementById('nsEditName').value = ns?.name ?? ''
-  document.getElementById('nsEditDescription').value = ns?.description ?? ''
-  document.getElementById('nsEditTtl').value = ns?.ttl ?? 86400
-  document.getElementById('nsEditAddress').value = ns?.address ?? ''
-  document.getElementById('nsEditAddress6').value = ns?.address6 ?? ''
-  document.getElementById('nsEditExportType').value = ns?.export?.type ?? 'bind'
-  document.getElementById('nsEditSaveBtn').textContent = isCreate ? 'Create' : 'Save'
-  bootstrap.Modal.getOrCreateInstance(document.getElementById('nsEditPane')).show()
+  nsForm = fromRecord(ns)
+
+  nsEl('nsEditPaneLabel').textContent = ns ? 'Edit Nameserver' : 'Create Nameserver'
+  nsEl('nsEditSaveBtn').textContent = ns ? 'Save' : 'Create'
+
+  fillSelect(nsEl('nsEditType'), NS_TYPES)
+  renderNsForm()
+  bootstrap.Modal.getOrCreateInstance(nsEl('nsEditPane')).show()
+}
+
+function fillSelect(select, options) {
+  select.innerHTML = ''
+  for (const opt of options) {
+    const el = document.createElement('option')
+    el.value = opt.value
+    el.textContent = opt.label ?? opt.value
+    select.appendChild(el)
+  }
+}
+
+/**
+ * Redraw from nsForm. Every change reconciles first, so a publisher the newly
+ * chosen type cannot read is replaced rather than left selected — the
+ * supervisor would refuse it at start(), long after the operator left.
+ */
+function renderNsForm() {
+  nsForm = reconcile(nsForm)
+  const fields = fieldsFor(nsForm)
+  const nsType = NS_TYPES.find((t) => t.value === nsForm.type)
+
+  nsEl('nsEditName').value = nsForm.name
+  nsEl('nsEditTtl').value = nsForm.ttl
+  nsEl('nsEditAddress').value = nsForm.address
+  nsEl('nsEditAddress6').value = nsForm.address6
+  nsEl('nsEditDescription').value = nsForm.description
+  nsEl('nsEditDnssec').checked = Boolean(nsForm.dnssec?.enabled)
+  if (!nsEl('nsDsAlgorithm').options.length) {
+    fillSelect(
+      nsEl('nsDsAlgorithm'),
+      DNSSEC_ALGORITHMS.map((value) => ({ value })),
+    )
+  }
+  nsEl('nsDsAlgorithm').value = nsForm.dnssec.algorithm
+  nsEl('nsDsNsec3').checked = Boolean(nsForm.dnssec.nsec3)
+  nsEl('nsDsKeyset').value = nsForm.dnssec.keyset
+
+  nsEl('nsEditType').value = nsForm.type
+  nsEl('nsEditTypeHelp').textContent =
+    nsType.serves === 'in-process'
+      ? 'Answers queries from this process.'
+      : 'Runs elsewhere; NicTool produces what it reads.'
+
+  fillSelect(nsEl('nsEditPublisher'), publishersFor(nsForm.type))
+  nsEl('nsEditPublisher').value = nsForm.publisherType
+  nsEl('nsEditPublisherHelp').textContent = fields.config
+    ? `Writes zone files and ${fields.config}.`
+    : ''
+
+  fillSelect(nsEl('nsEditTransport'), transportsFor(nsForm.type))
+  nsEl('nsEditTransport').value = nsForm.transportType
+  nsEl('nsEditTransportHelp').textContent =
+    nsForm.transportType === 'pull'
+      ? 'NicTool sends nothing; this server collects on its own schedule.'
+      : ''
+
+  showFields('nsEditPublisherFields', fields.publisher)
+  showFields('nsEditTransportFields', fields.transport)
+  nsEl('nsPubConfigName').textContent = fields.config ?? 'the server config'
+
+  nsEl('nsPubPath').value = nsForm.publisher.path
+  nsEl('nsPubWriteConfig').checked = nsForm.publisher.writeConfig
+  nsEl('nsPubCompile').checked = nsForm.publisher.compile
+  nsEl('nsPubDsn').value = nsForm.publisher.dsn
+  nsEl('nsPubDomainType').value = nsForm.publisher.domainType
+  nsEl('nsPubAddress').value = nsForm.publisher.address
+  nsEl('nsPubPassword').value = nsForm.publisher.password
+  nsEl('nsPubKeyPrefix').value = nsForm.publisher.keyPrefix
+
+  nsEl('nsTrRemote').value = nsForm.transport.remote
+  nsEl('nsTrSshKey').value = nsForm.transport.sshKey
+  nsEl('nsTrNotify').value = nsForm.transport.notify
+  nsEl('nsTrTsigKey').value = nsForm.transport.tsigKey
+  nsEl('nsTrPullSource').value = nsForm.transport.pullSource
+  nsEl('nsTrInterval').value = nsForm.transport.interval
+  nsEl('nsTrCooldown').value = nsForm.transport.cooldown
+
+  nsEl('nsEditListenSection').classList.toggle('d-none', !fields.listen)
+  if (fields.listen) renderListenRows()
+
+  renderDnssec(fields.dnssec)
+
+  renderNsMessages()
+}
+
+/**
+ * DNSSEC looks different per nameserver type, so say which it is. bind/nsd/coredns are
+ * signed here and need somewhere to keep keys; knot and powerdns sign for
+ * themselves and manage their own, so a key directory would be a lie.
+ */
+function renderDnssec(dnssec) {
+  const checkbox = nsEl('nsEditDnssec')
+  checkbox.disabled = !dnssec.available
+  if (!dnssec.available) checkbox.checked = false
+
+  const on = dnssec.available && checkbox.checked
+  nsEl('nsEditDnssecFields').classList.toggle('d-none', !on)
+  for (const el of nsEl('nsEditDnssecFields').querySelectorAll(
+    '[data-dnssec="keyset"]',
+  )) {
+    el.classList.toggle('d-none', dnssec.strategy !== 'signer')
+  }
+
+  nsEl('nsEditDnssecHelp').textContent = !dnssec.available
+    ? `Not available: ${dnssec.reason}.`
+    : dnssec.strategy === 'signer'
+      ? 'Zone files are signed here with dnssec-signzone before delivery.'
+      : 'This server signs its own zones; NicTool writes the policy into its config.'
+}
+
+function showFields(containerId, wanted) {
+  for (const el of nsEl(containerId).querySelectorAll('[data-field]')) {
+    el.classList.toggle('d-none', !wanted.includes(el.dataset.field))
+  }
+}
+
+function renderListenRows() {
+  const body = nsEl('nsEditListenBody')
+  body.innerHTML = ''
+
+  nsForm.listen.forEach((row, index) => {
+    const tr = document.createElement('tr')
+
+    const address = document.createElement('input')
+    address.type = 'text'
+    address.className = 'form-control form-control-sm'
+    address.value = row.address
+    address.placeholder = '127.0.0.1'
+    address.addEventListener('input', () => {
+      nsForm.listen[index].address = address.value
+      renderNsMessages()
+    })
+
+    const port = document.createElement('input')
+    port.type = 'number'
+    port.className = 'form-control form-control-sm'
+    port.value = row.port
+    port.min = 1
+    port.max = 65535
+    port.addEventListener('input', () => {
+      nsForm.listen[index].port = port.value
+      renderNsMessages()
+    })
+
+    const proto = document.createElement('select')
+    proto.className = 'form-select form-select-sm'
+    for (const value of ['udp', 'tcp']) {
+      const opt = document.createElement('option')
+      opt.value = value
+      opt.textContent = value
+      if (row.proto === value) opt.selected = true
+      proto.appendChild(opt)
+    }
+    proto.addEventListener('change', () => {
+      nsForm.listen[index].proto = proto.value
+    })
+
+    const remove = document.createElement('button')
+    remove.type = 'button'
+    remove.className = 'btn btn-sm btn-outline-danger'
+    remove.textContent = '\u00d7'
+    remove.title = 'Remove'
+    remove.addEventListener('click', () => {
+      nsForm.listen.splice(index, 1)
+      renderListenRows()
+      renderNsMessages()
+    })
+
+    for (const [child, cls] of [
+      [address, ''],
+      [port, ''],
+      [proto, ''],
+      [remove, 'text-end'],
+    ]) {
+      const td = document.createElement('td')
+      if (cls) td.className = cls
+      td.appendChild(child)
+      tr.appendChild(td)
+    }
+    body.appendChild(tr)
+  })
+}
+
+function renderNsMessages() {
+  readNsForm()
+  const { errors, warnings } = validate(nsForm, { storeType })
+
+  const errorBox = nsEl('nsEditErrors')
+  errorBox.classList.toggle('d-none', errors.length === 0)
+  errorBox.replaceChildren(...errors.map(asListItem))
+
+  const warnBox = nsEl('nsEditWarnings')
+  warnBox.classList.toggle('d-none', warnings.length === 0)
+  warnBox.replaceChildren(...warnings.map(asListItem))
+
+  nsEl('nsEditSaveBtn').disabled = errors.length > 0
+}
+
+function asListItem(text) {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div
+}
+
+/** Pull the inputs back into nsForm, without redrawing. */
+function readNsForm() {
+  nsForm.name = nsEl('nsEditName').value
+  nsForm.ttl = nsEl('nsEditTtl').value
+  nsForm.address = nsEl('nsEditAddress').value
+  nsForm.address6 = nsEl('nsEditAddress6').value
+  nsForm.description = nsEl('nsEditDescription').value
+  nsForm.dnssec = {
+    enabled: nsEl('nsEditDnssec').checked,
+    algorithm: nsEl('nsDsAlgorithm').value,
+    nsec3: nsEl('nsDsNsec3').checked,
+    keyset: nsEl('nsDsKeyset').value,
+  }
+
+  nsForm.publisher = {
+    ...nsForm.publisher,
+    path: nsEl('nsPubPath').value,
+    writeConfig: nsEl('nsPubWriteConfig').checked,
+    compile: nsEl('nsPubCompile').checked,
+    dsn: nsEl('nsPubDsn').value,
+    domainType: nsEl('nsPubDomainType').value,
+    address: nsEl('nsPubAddress').value,
+    password: nsEl('nsPubPassword').value,
+    keyPrefix: nsEl('nsPubKeyPrefix').value,
+  }
+  nsForm.transport = {
+    ...nsForm.transport,
+    remote: nsEl('nsTrRemote').value,
+    sshKey: nsEl('nsTrSshKey').value,
+    notify: nsEl('nsTrNotify').value,
+    tsigKey: nsEl('nsTrTsigKey').value,
+    pullSource: nsEl('nsTrPullSource').value,
+    interval: nsEl('nsTrInterval').value,
+    cooldown: nsEl('nsTrCooldown').value,
+  }
 }
 
 function initNsControls() {
-  const saveBtn = document.getElementById('nsEditSaveBtn')
-  if (saveBtn && !saveBtn.dataset.initialized) {
-    saveBtn.dataset.initialized = 'true'
-    saveBtn.addEventListener('click', async () => {
-      const ctx = activeNsContext
-      if (!ctx) return
+  const saveBtn = nsEl('nsEditSaveBtn')
+  if (!saveBtn || saveBtn.dataset.initialized === 'true') return
+  saveBtn.dataset.initialized = 'true'
 
-      const name = document.getElementById('nsEditName').value.trim()
-      if (!name) {
-        alert('Name is required.')
-        return
-      }
-
-      const ttlRaw = parseInt(document.getElementById('nsEditTtl').value, 10)
-      const payload = {
-        name,
-        description: document.getElementById('nsEditDescription').value.trim(),
-        ttl: Number.isFinite(ttlRaw) ? ttlRaw : 86400,
-        address: document.getElementById('nsEditAddress').value.trim() || undefined,
-        address6: document.getElementById('nsEditAddress6').value.trim() || undefined,
-        export: { type: document.getElementById('nsEditExportType').value },
-      }
-      if (ctx.mode === 'create') payload.gid = currentGroupId
-
-      const method = ctx.mode === 'create' ? 'POST' : 'PUT'
-      const url =
-        ctx.mode === 'create'
-          ? `${API_URI}/nameserver`
-          : `${API_URI}/nameserver/${ctx.ns.id}`
-
-      saveBtn.disabled = true
-      try {
-        const response = await ajax({ method, url, payload })
-        if (!response || response?.error) {
-          alert(response?.message ?? 'Save failed. See console for details.')
-          return
-        }
-        bootstrap.Modal.getOrCreateInstance(document.getElementById('nsEditPane')).hide()
-        showNameservers()
-      } catch (err) {
-        console.error('NS save failed:', err)
-        alert('Save failed due to a network error.')
-      } finally {
-        saveBtn.disabled = false
-      }
+  // Changing any of these can change which fields apply, so they redraw.
+  for (const id of ['nsEditType', 'nsEditPublisher', 'nsEditTransport']) {
+    nsEl(id).addEventListener('change', () => {
+      readNsForm()
+      nsForm[
+        { nsEditType: 'type', nsEditPublisher: 'publisherType' }[id] ?? 'transportType'
+      ] = nsEl(id).value
+      renderNsForm()
     })
   }
+
+  // The rest only affect validity.
+  for (const id of [
+    'nsEditName',
+    'nsEditTtl',
+    'nsEditAddress',
+    'nsPubPath',
+    'nsPubDsn',
+    'nsPubAddress',
+    'nsTrRemote',
+    'nsTrNotify',
+    'nsTrTsigKey',
+    'nsTrInterval',
+  ]) {
+    nsEl(id).addEventListener('input', renderNsMessages)
+  }
+  nsEl('nsEditDnssec').addEventListener('change', () => {
+    readNsForm()
+    renderNsForm()
+  })
+  for (const id of ['nsPubDomainType', 'nsDsAlgorithm', 'nsDsNsec3']) {
+    nsEl(id).addEventListener('change', renderNsMessages)
+  }
+  nsEl('nsDsKeyset').addEventListener('input', renderNsMessages)
+
+  nsEl('nsEditAddListen').addEventListener('click', () => {
+    nsForm.listen.push({ address: '127.0.0.1', port: 53, proto: 'udp' })
+    renderListenRows()
+    renderNsMessages()
+  })
+
+  saveBtn.addEventListener('click', async () => {
+    const ctx = activeNsContext
+    if (!ctx) return
+
+    readNsForm()
+    const { errors } = validate(nsForm, { storeType })
+    if (errors.length) return renderNsMessages()
+
+    const payload = toPayload(nsForm)
+    if (ctx.mode === 'create') payload.gid = currentGroupId
+
+    const method = ctx.mode === 'create' ? 'POST' : 'PUT'
+    const url =
+      ctx.mode === 'create'
+        ? `${API_URI}/nameserver`
+        : `${API_URI}/nameserver/${ctx.ns.id}`
+
+    saveBtn.disabled = true
+    try {
+      const response = await ajax({ method, url, payload })
+      if (!response || response?.error) {
+        const box = nsEl('nsEditErrors')
+        box.classList.remove('d-none')
+        box.replaceChildren(asListItem(response?.message ?? 'Save failed.'))
+        return
+      }
+      bootstrap.Modal.getOrCreateInstance(nsEl('nsEditPane')).hide()
+      showNameservers()
+    } catch (err) {
+      console.error('NS save failed:', err)
+      const box = nsEl('nsEditErrors')
+      box.classList.remove('d-none')
+      box.replaceChildren(asListItem('Save failed due to a network error.'))
+    } finally {
+      saveBtn.disabled = false
+    }
+  })
 }
 
 function showUsers() {
@@ -887,6 +1187,13 @@ function initZoneRecordModalActions() {
   })
 }
 
+// @nictool/dns-resource-record exports helper functions (classFor, applyMap, …)
+// alongside the record classes. Skipping them by name meant every helper added
+// later broke this loop — `new applyMap(null)` threw and took the page with it.
+function isRecordClass(exported) {
+  return typeof exported?.prototype?.getDescription === 'function'
+}
+
 function populateZrEditType() {
   const sel = document.getElementById('zrEditType')
 
@@ -907,7 +1214,7 @@ function populateZrEditType() {
   }
 
   for (const rr in RR) {
-    if (['default', 'typeMap'].includes(rr)) continue
+    if (!isRecordClass(RR[rr])) continue
     if (rr === 'SOA') continue // SOA is defined by the zone itself
     const instance = new RR[rr](null)
     const option = document.createElement('option')
